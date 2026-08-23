@@ -1,0 +1,154 @@
+name: helpdesk
+
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:7d2695c3aa88e792e8b3b233e7e4adb296a20412c6c0ca361e3edaaacfada108
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+  rabbitmq:
+    image: rabbitmq:4.3.4-management@sha256:eb5295d083325da5929a5ade766684d4019ffd2bce8bc7e43d6f9a05cafc8646
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:8.2.8-bookworm@sha256:2f7462b9e93e0a7ae2edf3a0a0babc8a4d29f8bfc50849b906b7caaef925edc1
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: development
+    command: ["npm", "run", "db:migrate:deploy"]
+    environment: &application-environment
+      APP_VERSION: ${APP_VERSION:-0.0.0}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      NODE_ENV: development
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST}
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: http://127.0.0.1:${WEB_PORT:-5173}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  support-api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: support-api
+    environment:
+      <<: *application-environment
+      API_PORT: 8080
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health/ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+    init: true
+    ports:
+      - "${API_PORT:-8080}:8080"
+    stop_grace_period: 15s
+
+  support-worker:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: support-worker
+    environment:
+      <<: *application-environment
+      WORKER_HEALTH_PORT: 8081
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8081/health/ready').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+    init: true
+    ports:
+      - "${WORKER_HEALTH_PORT:-8081}:8081"
+    stop_grace_period: 15s
+
+  support-web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: support-web
+    environment:
+      VITE_DEV_API_PROXY_TARGET: http://support-api:8080
+    depends_on:
+      support-api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD", "node", "-e", "fetch('http://127.0.0.1:4173/').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+    init: true
+    ports:
+      - "${WEB_PORT:-5173}:4173"
+    stop_grace_period: 10s
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:

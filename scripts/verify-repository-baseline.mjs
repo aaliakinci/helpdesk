@@ -36,8 +36,9 @@ const requiredDirectories = [
   "tests/e2e",
 ];
 
-const requiredDecisions = Array.from({ length: 12 }, (_, index) =>
-  `docs/decisions/${String(index + 1).padStart(4, "0")}-`,
+const requiredDecisions = Array.from(
+  { length: 12 },
+  (_, index) => `docs/decisions/${String(index + 1).padStart(4, "0")}-`,
 );
 
 const failures = [];

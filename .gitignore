@@ -4,6 +4,7 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+src/server/platform/database/generated/
 
 # Runtime and test artifacts
 logs/

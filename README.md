@@ -2,7 +2,18 @@
 
 A multi-tenant customer support platform for small and medium-sized support teams.
 
-## Product scope
+## Current foundation
+
+- NestJS API and standalone worker composition roots
+- Prisma 7 PostgreSQL client lifecycle and deployable migration
+- PostgreSQL, RabbitMQ, and Redis readiness checks
+- Liveness, readiness, public system status, and OpenAPI endpoints
+- Structured JSON logs with request and correlation identifiers
+- Central `application/problem+json` error responses
+- React, Vite, and Lily UI system-status application with Turkish and English locales
+- Docker Compose development topology and GitHub Actions quality gates
+
+## Planned v1 product scope
 
 - Customer and requester ticket creation
 - Agent queues and round-robin assignment
@@ -20,8 +31,8 @@ The v1 scope deliberately excludes email inbox synchronization, custom role buil
 
 The repository is organized around three deployable applications:
 
-- `support-api`: NestJS modular-monolith HTTP and WebSocket API
-- `support-worker`: NestJS background worker for outbox publication, RabbitMQ consumers, notification delivery, and scheduled jobs
+- `support-api`: NestJS modular-monolith HTTP API; authorized WebSocket support is planned
+- `support-worker`: NestJS background process; durable consumers and scheduled jobs are planned
 - `support-web`: React and TypeScript web application using `@lily_platform/lily_ui`
 
 PostgreSQL is the source of truth. RabbitMQ delivery is at-least-once and consumers must be idempotent. Redis may support WebSocket scale-out and replaceable state, but business correctness must not depend on it.
@@ -65,6 +76,31 @@ The host must satisfy the exact engine policy in `package.json`. The repository 
 ## Security
 
 Never commit `.env` files, access tokens, refresh tokens, private keys, or production credentials. `.env.example` contains placeholders only.
+
+HTTP logs include method, path without query values, status, duration, request ID, and correlation ID.
+They do not include request bodies, authorization headers, cookies, tokens, or connection URLs.
+
+## Local development
+
+Requirements: Docker Engine with Docker Compose.
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The local endpoints are:
+
+- Web: <http://127.0.0.1:5173>
+- API liveness: <http://127.0.0.1:8080/health/live>
+- API readiness: <http://127.0.0.1:8080/health/ready>
+- Public system status: <http://127.0.0.1:8080/api/v1/system/status>
+- OpenAPI UI: <http://127.0.0.1:8080/openapi>
+- Worker readiness: <http://127.0.0.1:8081/health/ready>
+- RabbitMQ management: <http://127.0.0.1:15672>
+
+After the containers are healthy, run `npm run smoke:services` from a Node.js 24.19.0
+environment. See [the development guide](docs/development.md) for the complete command matrix.
 
 ## License
 

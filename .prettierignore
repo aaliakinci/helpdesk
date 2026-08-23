@@ -1,0 +1,6 @@
+**/dist/
+coverage/
+node_modules/
+src/server/platform/database/generated/
+package-lock.json
+reports/

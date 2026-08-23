@@ -1,0 +1,63 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    container: node:24.19.0-bookworm-slim
+    services:
+      postgres:
+        image: postgres:18.6-bookworm
+        env:
+          POSTGRES_DB: helpdesk
+          POSTGRES_PASSWORD: ci-helpdesk-password
+          POSTGRES_USER: helpdesk
+        options: >-
+          --health-cmd "pg_isready -U helpdesk -d helpdesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4.3.4-management
+        env:
+          RABBITMQ_DEFAULT_PASS: ci-helpdesk-password
+          RABBITMQ_DEFAULT_USER: helpdesk
+          RABBITMQ_DEFAULT_VHOST: helpdesk
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8.2.8-bookworm
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      APP_VERSION: 0.0.0-ci
+      DATABASE_URL: postgresql://helpdesk:ci-helpdesk-password@postgres:5432/helpdesk?schema=public
+      NODE_ENV: test
+      RABBITMQ_URL: amqp://helpdesk:ci-helpdesk-password@rabbitmq:5672/helpdesk
+      REDIS_URL: redis://redis:6379
+      WEB_ORIGIN: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenSSL
+        run: apt-get update && apt-get install --yes --no-install-recommends openssl
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify static quality gates
+        run: npm run verify
+      - name: Apply database migrations
+        run: npm run db:migrate:deploy
+      - name: Verify infrastructure integration
+        run: npm run test:integration

@@ -1,0 +1,17 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../platform/database/generated"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PlatformMetadata {
+  key       String   @id @db.VarChar(100)
+  value     String   @db.VarChar(500)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("platform_metadata")
+}
