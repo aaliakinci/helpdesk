@@ -10,7 +10,10 @@ A multi-tenant customer support platform for small and medium-sized support team
 - Liveness, readiness, public system status, and OpenAPI endpoints
 - Structured JSON logs with request and correlation identifiers
 - Central `application/problem+json` error responses
-- React, Vite, and Lily UI system-status application with Turkish and English locales
+- Signed short-lived access tokens and rotating, hashed refresh sessions
+- Server-derived tenant context with fixed Owner, Manager, Agent, Requester, and Auditor roles
+- Same-tenant membership constraints and requester-to-customer-contact binding
+- React, Vite, and Lily UI login/session application with Turkish and English locales
 - Docker Compose development topology and GitHub Actions quality gates
 
 ## Planned v1 product scope
@@ -37,7 +40,7 @@ The repository is organized around three deployable applications:
 
 PostgreSQL is the source of truth. RabbitMQ delivery is at-least-once and consumers must be idempotent. Redis may support WebSocket scale-out and replaceable state, but business correctness must not depend on it.
 
-See [the accepted architecture decisions](docs/decisions/README.md) and [the platform baseline](docs/platform-baseline.md).
+See [the accepted architecture decisions](docs/decisions/README.md), [authentication design](docs/authentication.md), and [the platform baseline](docs/platform-baseline.md).
 
 ## Repository layout
 
@@ -100,7 +103,12 @@ The local endpoints are:
 - RabbitMQ management: <http://127.0.0.1:15672>
 
 After the containers are healthy, run `npm run smoke:services` from a Node.js 24.19.0
-environment. See [the development guide](docs/development.md) for the complete command matrix.
+environment. `npm run smoke:identity` verifies login, tenant isolation, rotation/reuse detection,
+role boundaries, requester binding, rate limiting, and tenant switching. Demo emails are documented
+in [the authentication guide](docs/authentication.md); their local-only password is read from
+`DEMO_SEED_PASSWORD`.
+
+See [the development guide](docs/development.md) for the complete command matrix.
 
 ## License
 

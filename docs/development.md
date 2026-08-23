@@ -12,9 +12,9 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Compose starts PostgreSQL, RabbitMQ, Redis, applies pending Prisma migrations, then starts the API,
-worker, and web services. Dependency health gates are explicit; an unmigrated database cannot make
-the API or worker ready.
+Compose starts PostgreSQL, RabbitMQ, Redis, applies pending Prisma migrations, seeds deterministic
+local identities, then starts the API, worker, and web services. Dependency health gates are
+explicit; an unmigrated or unseeded database cannot start the API.
 
 Stop the topology without deleting data volumes:
 
@@ -38,6 +38,8 @@ URLs in the environment:
 
 ```bash
 npm run db:migrate:deploy
+npm run build:server
+npm run db:seed
 npm run test:integration
 ```
 
@@ -45,10 +47,13 @@ With the complete Compose topology running:
 
 ```bash
 npm run smoke:services
+npm run smoke:identity
 ```
 
-`verify` is the static and build gate. The GitHub Actions workflow additionally applies migrations
-to clean PostgreSQL and runs the infrastructure integration test.
+`smoke:identity` requires `DEMO_SEED_PASSWORD` and uses the running API; it never prints the
+password, access token, or refresh cookie. `verify` is the static and build gate. The GitHub Actions
+workflow additionally applies migrations, seeds deterministic test identities, and runs the
+infrastructure integration suite.
 
 ## Service lifecycle
 

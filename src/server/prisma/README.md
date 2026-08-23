@@ -6,4 +6,9 @@ The baseline migration creates `platform_metadata`. Readiness queries this table
 unmigrated database is not reported as ready. Runtime connections use the matching Prisma
 PostgreSQL driver adapter.
 
+The identity migration adds global users, tenants, tenant memberships, customers and contacts,
+rotating session generations, and identity audit entries. Composite foreign keys enforce
+same-tenant customer/contact and membership/session relationships. The deterministic seed reads its
+local-only password from `DEMO_SEED_PASSWORD` and stores only scrypt hashes.
+
 Migrations must preserve tenant isolation, same-tenant relationships, durable outbox data, and safe forward deployment.

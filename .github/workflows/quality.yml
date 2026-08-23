@@ -43,12 +43,14 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      ACCESS_TOKEN_SECRET: ci-access-token-secret-at-least-32-bytes
       APP_VERSION: 0.0.0-ci
       DATABASE_URL: postgresql://helpdesk:ci-helpdesk-password@postgres:5432/helpdesk?schema=public
       NODE_ENV: test
       RABBITMQ_URL: amqp://helpdesk:ci-helpdesk-password@rabbitmq:5672/helpdesk
       REDIS_URL: redis://redis:6379
       WEB_ORIGIN: http://127.0.0.1:5173
+      DEMO_SEED_PASSWORD: ci-demo-password-never-used-in-production
     steps:
       - uses: actions/checkout@v4
       - name: Install OpenSSL
@@ -59,5 +61,7 @@ jobs:
         run: npm run verify
       - name: Apply database migrations
         run: npm run db:migrate:deploy
+      - name: Seed deterministic demo identities
+        run: npm run db:seed
       - name: Verify infrastructure integration
         run: npm run test:integration

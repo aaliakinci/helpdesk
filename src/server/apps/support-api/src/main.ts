@@ -23,7 +23,8 @@ async function bootstrap(): Promise<void> {
 
   app.enableCors({
     credentials: true,
-    methods: ["GET", "HEAD", "OPTIONS"],
+    allowedHeaders: ["Accept", "Authorization", "Content-Type", "X-Correlation-ID", "X-Request-ID"],
+    methods: ["GET", "HEAD", "OPTIONS", "PATCH", "POST"],
     origin: config.values.webOrigin,
   });
   app.useGlobalFilters(new ProblemDetailsFilter(app.get(RequestContextService)));

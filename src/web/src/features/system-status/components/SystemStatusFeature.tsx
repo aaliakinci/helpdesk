@@ -1,3 +1,4 @@
+import { useLilyNavigate } from "@lily_platform/lily_ui/router";
 import { Alert } from "@lily_platform/lily_ui/ui/atoms/Alert";
 import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
@@ -16,6 +17,7 @@ interface SystemStatusFeatureProps {
 }
 
 export function SystemStatusFeature({ id }: SystemStatusFeatureProps) {
+  const navigate = useLilyNavigate();
   const { changeLocale, locale, t } = useAppTranslation();
   const { reload, state } = useSystemStatus();
   const report = state.kind === "ready" ? state.report : undefined;
@@ -132,14 +134,19 @@ export function SystemStatusFeature({ id }: SystemStatusFeatureProps) {
         )}
 
         <Box id={`${id}.actions`}>
-          <Button
-            id={`${id}.retry`}
-            variant="outlined"
-            disabled={state.kind === "loading"}
-            onClick={() => void reload()}
-          >
-            {state.kind === "loading" ? t("app:status.checking") : t("app:status.retry")}
-          </Button>
+          <Stack id={`${id}.actions.content`} direction="row" spacing={1}>
+            <Button
+              id={`${id}.retry`}
+              variant="outlined"
+              disabled={state.kind === "loading"}
+              onClick={() => void reload()}
+            >
+              {state.kind === "loading" ? t("app:status.checking") : t("app:status.retry")}
+            </Button>
+            <Button id={`${id}.login`} variant="contained" onClick={() => void navigate("/login")}>
+              {t("app:navigation.signIn")}
+            </Button>
+          </Stack>
         </Box>
       </Stack>
     </PublicShell>

@@ -1,15 +1,71 @@
 import type { LilyPageComponent } from "@lily_platform/lily_ui";
 import { createLilyRouterKit } from "@lily_platform/lily_ui/router";
-import { createElement } from "react";
+import { createElement, lazy, Suspense } from "react";
 
+import type { TenantRole } from "@/features/auth/session";
 import { SystemStatusPage } from "@/pages/SystemStatusPage";
 
-export type AppRouterState = Readonly<Record<string, never>>;
+import {
+  AnonymousGuard,
+  AuditorGuard,
+  AuthenticatedGuard,
+  RequesterGuard,
+  StaffGuard,
+} from "./authGuards";
+
+export interface AppRouterState {
+  readonly authentication: "anonymous" | "authenticated";
+  readonly permissions: readonly string[];
+  readonly role: TenantRole | null;
+}
 
 const routerKit = createLilyRouterKit<AppRouterState>();
 const systemStatusPage: LilyPageComponent = (props) => createElement(SystemStatusPage, props);
 
+function lazyPage(importer: () => Promise<{ default: LilyPageComponent }>): LilyPageComponent {
+  const Page = lazy(importer);
+  return (props) => createElement(Suspense, { fallback: null }, createElement(Page, props));
+}
+
+const loginPage = lazyPage(async () => ({
+  default: (await import("@/pages/LoginPage")).LoginPage,
+}));
+const workspacePage = lazyPage(async () => ({
+  default: (await import("@/pages/WorkspacePage")).WorkspacePage,
+}));
+const requesterPortalPage = lazyPage(async () => ({
+  default: (await import("@/pages/RequesterPortalPage")).RequesterPortalPage,
+}));
+const auditWorkspacePage = lazyPage(async () => ({
+  default: (await import("@/pages/AuditWorkspacePage")).AuditWorkspacePage,
+}));
+
 export const appGuardRegistry = routerKit.createGuardRegistry();
+appGuardRegistry.register(AuthenticatedGuard);
+appGuardRegistry.register(AnonymousGuard);
+appGuardRegistry.register(StaffGuard);
+appGuardRegistry.register(RequesterGuard);
+appGuardRegistry.register(AuditorGuard);
+
 export const APP_ROUTES = routerKit.createRoutes([
   { id: "system-status", path: "/", page: systemStatusPage },
+  { id: "login", path: "/login", page: loginPage, guards: [AnonymousGuard] },
+  {
+    id: "workspace",
+    path: "/workspace",
+    page: workspacePage,
+    guards: [AuthenticatedGuard, StaffGuard],
+  },
+  {
+    id: "requester-portal",
+    path: "/portal",
+    page: requesterPortalPage,
+    guards: [AuthenticatedGuard, RequesterGuard],
+  },
+  {
+    id: "audit-workspace",
+    path: "/audit",
+    page: auditWorkspacePage,
+    guards: [AuthenticatedGuard, AuditorGuard],
+  },
 ]);

@@ -8,10 +8,158 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TenantStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TenantRole {
+  OWNER
+  MANAGER
+  AGENT
+  REQUESTER
+  AUDITOR
+}
+
 model PlatformMetadata {
   key       String   @id @db.VarChar(100)
   value     String   @db.VarChar(500)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("platform_metadata")
+}
+
+model User {
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique(map: "users_email_key") @db.VarChar(254)
+  displayName   String     @map("display_name") @db.VarChar(120)
+  passwordHash  String     @map("password_hash") @db.VarChar(255)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships   TenantMembership[]
+  sessions      UserSession[]
+  contacts      CustomerContact[]
+  identityAudit IdentityAuditEntry[] @relation("IdentityAuditActor")
+
+  @@map("users")
+}
+
+model Tenant {
+  id            String       @id @default(uuid()) @db.Uuid
+  slug          String       @unique(map: "tenants_slug_key") @db.VarChar(80)
+  name          String       @db.VarChar(120)
+  timeZone      String       @default("Europe/Istanbul") @map("time_zone") @db.VarChar(80)
+  status        TenantStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships   TenantMembership[]
+  customers     Customer[]
+  contacts      CustomerContact[]
+  sessions      UserSession[]
+  identityAudit IdentityAuditEntry[]
+
+  @@map("tenants")
+}
+
+model Customer {
+  id        String            @id @default(uuid()) @db.Uuid
+  tenantId  String            @map("tenant_id") @db.Uuid
+  name      String            @db.VarChar(160)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contacts  CustomerContact[]
+
+  @@unique([tenantId, id], map: "customers_tenant_id_id_key")
+  @@index([tenantId, name], map: "customers_tenant_name_idx")
+  @@map("customers")
+}
+
+model CustomerContact {
+  id          String             @id @default(uuid()) @db.Uuid
+  tenantId    String             @map("tenant_id") @db.Uuid
+  customerId  String             @map("customer_id") @db.Uuid
+  userId      String?            @map("user_id") @db.Uuid
+  email       String             @db.VarChar(254)
+  displayName String             @map("display_name") @db.VarChar(120)
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer           @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberships TenantMembership[]
+
+  @@unique([tenantId, id], map: "customer_contacts_tenant_id_id_key")
+  @@unique([tenantId, email], map: "customer_contacts_tenant_email_key")
+  @@unique([tenantId, userId], map: "customer_contacts_tenant_user_key")
+  @@map("customer_contacts")
+}
+
+model TenantMembership {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @map("tenant_id") @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  customerContactId String?          @map("customer_contact_id") @db.Uuid
+  role              TenantRole
+  status            MembershipStatus @default(ACTIVE)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerContact   CustomerContact? @relation(fields: [tenantId, customerContactId], references: [tenantId, id], onDelete: Restrict)
+  sessions          UserSession[]
+
+  @@unique([tenantId, id], map: "tenant_memberships_tenant_id_id_key")
+  @@unique([tenantId, userId], map: "tenant_memberships_tenant_user_key")
+  @@unique([tenantId, userId, id], map: "tenant_memberships_tenant_user_id_key")
+  @@index([userId, status], map: "tenant_memberships_user_status_idx")
+  @@map("tenant_memberships")
+}
+
+model UserSession {
+  id               String            @id @default(uuid()) @db.Uuid
+  familyId         String            @map("family_id") @db.Uuid
+  tenantId         String            @map("tenant_id") @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  membershipId     String            @map("membership_id") @db.Uuid
+  refreshTokenHash String            @unique(map: "user_sessions_refresh_token_hash_key") @map("refresh_token_hash") @db.Char(64)
+  issuedAt         DateTime          @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt        DateTime          @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt       DateTime?         @map("last_used_at") @db.Timestamptz(3)
+  revokedAt        DateTime?         @map("revoked_at") @db.Timestamptz(3)
+  revokeReason     String?           @map("revoke_reason") @db.VarChar(80)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership       TenantMembership  @relation(fields: [tenantId, userId, membershipId], references: [tenantId, userId, id], onDelete: Cascade)
+
+  @@index([familyId, revokedAt], map: "user_sessions_family_revoked_idx")
+  @@index([userId, revokedAt], map: "user_sessions_user_revoked_idx")
+  @@map("user_sessions")
+}
+
+model IdentityAuditEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  actorUserId  String   @map("actor_user_id") @db.Uuid
+  action       String   @db.VarChar(100)
+  subjectType  String   @map("subject_type") @db.VarChar(80)
+  subjectId    String   @map("subject_id") @db.Uuid
+  metadata     Json?
+  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor        User     @relation("IdentityAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, occurredAt], map: "identity_audit_tenant_occurred_idx")
+  @@map("identity_audit_entries")
 }

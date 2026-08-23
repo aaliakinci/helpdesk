@@ -1,11 +1,12 @@
 import { MiddlewareConsumer, Module, type NestModule, RequestMethod } from "@nestjs/common";
 
 import { PlatformModule, RequestContextMiddleware } from "../../../platform/index.js";
+import { IdentityModule } from "../../../modules/identity/index.js";
 import { HealthController } from "./health.controller.js";
 import { SystemController } from "./system.controller.js";
 
 @Module({
-  imports: [PlatformModule],
+  imports: [PlatformModule, IdentityModule],
   controllers: [HealthController, SystemController],
 })
 export class AppModule implements NestModule {

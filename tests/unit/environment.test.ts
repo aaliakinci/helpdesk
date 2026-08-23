@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseEnvironment } from "../../src/server/platform/config/environment.js";
 
 const validEnvironment = {
+  ACCESS_TOKEN_SECRET: "test-access-token-secret-at-least-32-bytes",
   DATABASE_URL: "postgresql://helpdesk:secret@127.0.0.1:5432/helpdesk",
   RABBITMQ_URL: "amqp://helpdesk:secret@127.0.0.1:5672/helpdesk",
   REDIS_URL: "redis://127.0.0.1:6379",
@@ -14,12 +15,22 @@ describe("parseEnvironment", () => {
     const result = parseEnvironment(validEnvironment);
 
     expect(result).toMatchObject({
+      accessTokenTtlSeconds: 600,
       apiPort: 8080,
       appVersion: "0.0.0",
       nodeEnvironment: "development",
       workerHealthPort: 8081,
     });
     expect(result.databaseUrl).toBe(validEnvironment.DATABASE_URL);
+  });
+
+  it("requires a strong signing secret and secure production cookie defaults", () => {
+    expect(() =>
+      parseEnvironment({ ...validEnvironment, ACCESS_TOKEN_SECRET: "too-short" }),
+    ).toThrow("ACCESS_TOKEN_SECRET must contain at least 32 bytes.");
+    expect(
+      parseEnvironment({ ...validEnvironment, NODE_ENV: "production" }).refreshCookieSecure,
+    ).toBe(true);
   });
 
   it("rejects missing infrastructure configuration", () => {

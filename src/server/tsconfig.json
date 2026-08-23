@@ -11,6 +11,6 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["apps/**/*.ts", "platform/**/*.ts"],
+  "include": ["apps/**/*.ts", "modules/**/*.ts", "platform/**/*.ts", "prisma/**/*.ts"],
   "exclude": ["**/*.test.ts", "../../dist", "../../node_modules"]
 }

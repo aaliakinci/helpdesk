@@ -54,15 +54,38 @@ services:
       target: development
     command: ["npm", "run", "db:migrate:deploy"]
     environment: &application-environment
+      ACCESS_TOKEN_AUDIENCE: ${ACCESS_TOKEN_AUDIENCE:-helpdesk-support-api}
+      ACCESS_TOKEN_ISSUER: ${ACCESS_TOKEN_ISSUER:-helpdesk}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-600}
       APP_VERSION: ${APP_VERSION:-0.0.0}
+      AUTH_LOGIN_LIMIT: ${AUTH_LOGIN_LIMIT:-5}
+      AUTH_LOGIN_WINDOW_SECONDS: ${AUTH_LOGIN_WINDOW_SECONDS:-60}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       NODE_ENV: development
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-helpdesk_refresh}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
+      REFRESH_SESSION_TTL_DAYS: ${REFRESH_SESSION_TTL_DAYS:-7}
       REDIS_URL: redis://redis:6379
       WEB_ORIGIN: http://127.0.0.1:${WEB_PORT:-5173}
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  seed:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+      target: build
+    command: ["npm", "run", "db:seed"]
+    environment:
+      <<: *application-environment
+      DEMO_SEED_PASSWORD: ${DEMO_SEED_PASSWORD}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   support-api:
@@ -74,7 +97,7 @@ services:
       <<: *application-environment
       API_PORT: 8080
     depends_on:
-      migrate:
+      seed:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy

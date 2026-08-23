@@ -8,9 +8,12 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { appStore } from "./app/store/appStore";
 import { createHelpdeskTheme } from "./app/theme";
+import { AuthProvider, configureAuthHttpClient } from "./features/auth/session";
 import { appI18nOptions } from "./i18n";
 import { AppErrorBoundary } from "./shared/components";
 import "./styles.css";
+
+configureAuthHttpClient();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {
@@ -24,7 +27,9 @@ createRoot(rootElement).render(
         <LilyStoreProvider store={appStore}>
           <LilyI18nDirectionProvider createTheme={createHelpdeskTheme}>
             <CssBaseline />
-            <App />
+            <AuthProvider>
+              <App />
+            </AuthProvider>
           </LilyI18nDirectionProvider>
         </LilyStoreProvider>
       </LilyI18nProvider>

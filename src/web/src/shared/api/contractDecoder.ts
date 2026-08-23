@@ -18,3 +18,18 @@ export function requireNumber(value: unknown, name: string): number {
   }
   return value;
 }
+
+export function requireBoolean(value: unknown, name: string): boolean {
+  if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean.`);
+  return value;
+}
+
+export function requireArray(value: unknown, name: string): readonly unknown[] {
+  if (!Array.isArray(value)) throw new TypeError(`${name} must be an array.`);
+  return value;
+}
+
+export function nullableString(value: unknown, name: string): string | null {
+  if (value === null) return null;
+  return requireString(value, name);
+}

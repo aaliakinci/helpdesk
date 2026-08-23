@@ -93,6 +93,18 @@ function problemDefinition(status: number): {
         detail: "The requested resource was not found.",
         title: "Not found",
       };
+    case 409:
+      return {
+        code: "resource.conflict",
+        detail: "The requested change conflicts with the current resource state.",
+        title: "Conflict",
+      };
+    case 429:
+      return {
+        code: "auth.rate_limited",
+        detail: "Too many authentication attempts were made. Try again later.",
+        title: "Too many requests",
+      };
     case 503:
       return {
         code: "service.not_ready",
