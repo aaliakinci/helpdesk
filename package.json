@@ -1,0 +1,24 @@
+{
+  "name": "helpdesk-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Multi-tenant customer support platform portfolio project.",
+  "type": "module",
+  "engines": {
+    "node": ">=24.19.0 <25",
+    "npm": ">=11.17.0 <12"
+  },
+  "packageManager": "npm@11.17.0",
+  "workspaces": [
+    "src/server/apps/*",
+    "src/web"
+  ],
+  "scripts": {
+    "verify": "npm run verify:baseline",
+    "verify:baseline": "node scripts/verify-repository-baseline.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaliakinci/helpdesk.git"
+  }
+}

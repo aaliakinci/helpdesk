@@ -1,0 +1,34 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Runtime and test artifacts
+logs/
+*.log
+artifacts/
+test-results/
+playwright-report/
+.nyc_output/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Tooling and editor state
+.DS_Store
+.idea/
+.vscode/
+.cache/
+.eslintcache
+
+# Local reports
+reports/
+
+# Managed-workspace Git fallback, if ever needed
+.git-local/
