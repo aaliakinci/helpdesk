@@ -41,12 +41,13 @@ export class TicketQueryService {
     input: TicketListInput,
   ): Promise<TicketPage> {
     const scope = ticketReadScope(identity);
+    const includeOperations = identity.role !== "REQUESTER";
     const where: Prisma.TicketWhereInput = {
       AND: [
         scope,
-        ...(input.assignment === "MINE"
+        ...(includeOperations && input.assignment === "MINE"
           ? [{ currentAssigneeMembershipId: identity.membershipId }]
-          : input.assignment === "UNASSIGNED"
+          : includeOperations && input.assignment === "UNASSIGNED"
             ? [{ currentAssigneeMembershipId: null }]
             : []),
         ...(input.search
@@ -81,7 +82,7 @@ export class TicketQueryService {
           : []),
       ],
       ...(input.priority ? { priority: input.priority } : {}),
-      ...(input.queueId ? { currentQueueId: input.queueId } : {}),
+      ...(includeOperations && input.queueId ? { currentQueueId: input.queueId } : {}),
       ...(input.status ? { status: input.status } : {}),
     };
     const orderBy: Prisma.TicketOrderByWithRelationInput = {
@@ -98,7 +99,7 @@ export class TicketQueryService {
       }),
     ]);
     return {
-      items: tickets.map((ticket) => toTicketSummary(ticket, identity.role !== "REQUESTER")),
+      items: tickets.map((ticket) => toTicketSummary(ticket, includeOperations)),
       page: input.page,
       pageSize: input.pageSize,
       total,
@@ -171,29 +172,39 @@ export class TicketQueryService {
 
     return {
       ...toTicketSummary(ticket, !isRequester),
-      assignmentHistory: isRequester
-        ? []
-        : ticket.assignmentHistory.map((entry) => ({
-            action: entry.action,
-            actor: entry.actor,
-            fromAssignee: entry.fromAssignee
-              ? {
-                  displayName: entry.fromAssignee.user.displayName,
-                  membershipId: entry.fromAssignee.id,
-                }
-              : null,
-            fromQueue: entry.fromQueue,
-            id: entry.id,
-            occurredAtUtc: entry.occurredAt.toISOString(),
-            toAssignee: entry.toAssignee
-              ? {
-                  displayName: entry.toAssignee.user.displayName,
-                  membershipId: entry.toAssignee.id,
-                }
-              : null,
-            toQueue: entry.toQueue,
-            version: entry.version,
-          })),
+      ...(!isRequester
+        ? {
+            assignmentHistory: ticket.assignmentHistory.map((entry) => ({
+              action: entry.action,
+              actor: entry.actor,
+              fromAssignee: entry.fromAssignee
+                ? {
+                    displayName: entry.fromAssignee.user.displayName,
+                    membershipId: entry.fromAssignee.id,
+                  }
+                : null,
+              fromQueue: entry.fromQueue,
+              id: entry.id,
+              occurredAtUtc: entry.occurredAt.toISOString(),
+              toAssignee: entry.toAssignee
+                ? {
+                    displayName: entry.toAssignee.user.displayName,
+                    membershipId: entry.toAssignee.id,
+                  }
+                : null,
+              toQueue: entry.toQueue,
+              version: entry.version,
+            })),
+            statusHistory: ticket.statusHistory.map((entry) => ({
+              actor: entry.actor,
+              fromStatus: entry.fromStatus,
+              id: entry.id,
+              occurredAtUtc: entry.occurredAt.toISOString(),
+              toStatus: entry.toStatus,
+              version: entry.version,
+            })),
+          }
+        : {}),
       closedAtUtc: ticket.closedAt?.toISOString() ?? null,
       comments: ticket.comments.map((comment) => ({
         author: comment.author,
@@ -206,16 +217,6 @@ export class TicketQueryService {
       reopenedFrom: ticket.reopenedFrom,
       reopenedTickets: ticket.reopenedTickets,
       resolvedAtUtc: ticket.resolvedAt?.toISOString() ?? null,
-      statusHistory: isRequester
-        ? []
-        : ticket.statusHistory.map((entry) => ({
-            actor: entry.actor,
-            fromStatus: entry.fromStatus,
-            id: entry.id,
-            occurredAtUtc: entry.occurredAt.toISOString(),
-            toStatus: entry.toStatus,
-            version: entry.version,
-          })),
       tags: ticket.tags.map(({ tag }) => tag),
     };
   }
@@ -223,20 +224,24 @@ export class TicketQueryService {
 
 function toTicketSummary(ticket: TicketSummaryRecord, includeOperations: boolean): TicketSummary {
   return {
-    assignedAtUtc: includeOperations ? (ticket.assignedAt?.toISOString() ?? null) : null,
-    assignee:
-      includeOperations && ticket.currentAssignee
-        ? {
-            displayName: ticket.currentAssignee.user.displayName,
-            membershipId: ticket.currentAssignee.id,
-          }
-        : null,
+    ...(includeOperations
+      ? {
+          assignedAtUtc: ticket.assignedAt?.toISOString() ?? null,
+          assignee: ticket.currentAssignee
+            ? {
+                displayName: ticket.currentAssignee.user.displayName,
+                membershipId: ticket.currentAssignee.id,
+              }
+            : null,
+          queue: ticket.currentQueue,
+        }
+      : {}),
+    assignmentStatus: ticket.currentAssignee ? "ASSIGNED" : "UNASSIGNED",
     createdAtUtc: ticket.createdAt.toISOString(),
     firstResponseAtUtc: ticket.firstResponseAt?.toISOString() ?? null,
     id: ticket.id,
     number: ticket.number,
     priority: ticket.priority,
-    queue: includeOperations ? ticket.currentQueue : null,
     requester: {
       contactId: ticket.requesterContact.id,
       customerId: ticket.requesterContact.customerId,

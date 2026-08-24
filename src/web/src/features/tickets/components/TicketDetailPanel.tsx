@@ -113,14 +113,23 @@ export function TicketDetailPanel({
       >
         <Card id={`${id}.ownership`} cardTitle={t("app:tickets.context.title")}>
           <Stack id={`${id}.ownership.content`} spacing={1}>
-            <Typography id={`${id}.ownership.queue`} component="p">
-              <strong>{t("app:tickets.assignment.queue")}:</strong>{" "}
-              {detail.queue?.name ?? t("app:tickets.assignment.noQueue")}
-            </Typography>
-            <Typography id={`${id}.ownership.assignee`} component="p">
-              <strong>{t("app:tickets.assignment.assignee")}:</strong>{" "}
-              {detail.assignee?.displayName ?? t("app:tickets.assignment.unassigned")}
-            </Typography>
+            {mode === "requester" ? (
+              <Typography id={`${id}.ownership.assignment-status`} component="p">
+                <strong>{t("app:tickets.columns.assignmentStatus")}:</strong>{" "}
+                {t(`app:tickets.assignment.status.${detail.assignmentStatus}`)}
+              </Typography>
+            ) : (
+              <>
+                <Typography id={`${id}.ownership.queue`} component="p">
+                  <strong>{t("app:tickets.assignment.queue")}:</strong>{" "}
+                  {detail.queue?.name ?? t("app:tickets.assignment.noQueue")}
+                </Typography>
+                <Typography id={`${id}.ownership.assignee`} component="p">
+                  <strong>{t("app:tickets.assignment.assignee")}:</strong>{" "}
+                  {detail.assignee?.displayName ?? t("app:tickets.assignment.unassigned")}
+                </Typography>
+              </>
+            )}
             <Typography id={`${id}.ownership.created`} component="p" variant="body2">
               {t("app:tickets.context.createdAt")}:{" "}
               {formatTicketDate(detail.createdAtUtc, ticket.locale, ticket.timeZone)}

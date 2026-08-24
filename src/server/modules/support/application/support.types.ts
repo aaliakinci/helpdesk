@@ -39,14 +39,15 @@ export interface TicketRequester {
 }
 
 export interface TicketSummary {
-  readonly assignedAtUtc: string | null;
-  readonly assignee: AssignmentPerson | null;
+  readonly assignedAtUtc?: string | null;
+  readonly assignee?: AssignmentPerson | null;
+  readonly assignmentStatus: TicketAssignmentStatus;
   readonly createdAtUtc: string;
   readonly firstResponseAtUtc: string | null;
   readonly id: string;
   readonly number: number;
   readonly priority: TicketPriority;
-  readonly queue: QueueReference | null;
+  readonly queue?: QueueReference | null;
   readonly requester: TicketRequester;
   readonly status: TicketStatus;
   readonly subject: string;
@@ -72,16 +73,18 @@ export interface TicketStatusHistoryView {
 }
 
 export interface TicketDetail extends TicketSummary {
-  readonly assignmentHistory: readonly TicketAssignmentView[];
+  readonly assignmentHistory?: readonly TicketAssignmentView[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketCommentView[];
   readonly description: string;
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
-  readonly statusHistory: readonly TicketStatusHistoryView[];
+  readonly statusHistory?: readonly TicketStatusHistoryView[];
   readonly tags: readonly { readonly id: string; readonly name: string }[];
 }
+
+export type TicketAssignmentStatus = "ASSIGNED" | "UNASSIGNED";
 
 export interface TicketPage {
   readonly items: readonly TicketSummary[];

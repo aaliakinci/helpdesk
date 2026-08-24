@@ -9,6 +9,7 @@ import {
 export type TicketStatus = "NEW" | "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export type TicketCommentVisibility = "PUBLIC" | "INTERNAL";
+export type TicketAssignmentStatus = "ASSIGNED" | "UNASSIGNED";
 
 export interface TicketRequester {
   readonly contactId: string;
@@ -19,14 +20,15 @@ export interface TicketRequester {
 }
 
 export interface TicketSummary {
-  readonly assignedAtUtc: string | null;
-  readonly assignee: AssignmentPerson | null;
+  readonly assignedAtUtc?: string | null;
+  readonly assignee?: AssignmentPerson | null;
+  readonly assignmentStatus: TicketAssignmentStatus;
   readonly createdAtUtc: string;
   readonly firstResponseAtUtc: string | null;
   readonly id: string;
   readonly number: number;
   readonly priority: TicketPriority;
-  readonly queue: QueueReference | null;
+  readonly queue?: QueueReference | null;
   readonly requester: TicketRequester;
   readonly status: TicketStatus;
   readonly subject: string;
@@ -43,14 +45,14 @@ export interface TicketComment {
 }
 
 export interface TicketDetail extends TicketSummary {
-  readonly assignmentHistory: readonly TicketAssignment[];
+  readonly assignmentHistory?: readonly TicketAssignment[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketComment[];
   readonly description: string;
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
-  readonly statusHistory: readonly {
+  readonly statusHistory?: readonly {
     readonly actor: { readonly displayName: string; readonly id: string };
     readonly fromStatus: TicketStatus | null;
     readonly id: string;
@@ -114,6 +116,7 @@ export interface CreateTicketRequest {
 const STATUSES: readonly TicketStatus[] = ["NEW", "OPEN", "PENDING", "RESOLVED", "CLOSED"];
 const PRIORITIES: readonly TicketPriority[] = ["LOW", "NORMAL", "HIGH", "URGENT"];
 const VISIBILITIES: readonly TicketCommentVisibility[] = ["PUBLIC", "INTERNAL"];
+const ASSIGNMENT_STATUSES: readonly TicketAssignmentStatus[] = ["ASSIGNED", "UNASSIGNED"];
 
 export function decodeTicketPage(body: unknown): TicketPage {
   const value = requireRecord(body, "ticket page");
@@ -130,20 +133,26 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
   const value = requireRecord(body, "ticket detail");
   return {
     ...decodeTicketSummary(body),
-    assignmentHistory: requireArray(value.assignmentHistory, "assignmentHistory").map((item) => {
-      const assignment = requireRecord(item, "assignment history");
-      return {
-        action: decodeAssignmentAction(assignment.action),
-        actor: decodePerson(assignment.actor),
-        fromAssignee: decodeNullableAssignee(assignment.fromAssignee),
-        fromQueue: decodeNullableQueue(assignment.fromQueue),
-        id: requireString(assignment.id, "assignment.id"),
-        occurredAtUtc: requireString(assignment.occurredAtUtc, "assignment.occurredAtUtc"),
-        toAssignee: decodeNullableAssignee(assignment.toAssignee),
-        toQueue: decodeNullableQueue(assignment.toQueue),
-        version: requireNumber(assignment.version, "assignment.version"),
-      };
-    }),
+    ...(Object.hasOwn(value, "assignmentHistory")
+      ? {
+          assignmentHistory: requireArray(value.assignmentHistory, "assignmentHistory").map(
+            (item) => {
+              const assignment = requireRecord(item, "assignment history");
+              return {
+                action: decodeAssignmentAction(assignment.action),
+                actor: decodePerson(assignment.actor),
+                fromAssignee: decodeNullableAssignee(assignment.fromAssignee),
+                fromQueue: decodeNullableQueue(assignment.fromQueue),
+                id: requireString(assignment.id, "assignment.id"),
+                occurredAtUtc: requireString(assignment.occurredAtUtc, "assignment.occurredAtUtc"),
+                toAssignee: decodeNullableAssignee(assignment.toAssignee),
+                toQueue: decodeNullableQueue(assignment.toQueue),
+                version: requireNumber(assignment.version, "assignment.version"),
+              };
+            },
+          ),
+        }
+      : {}),
     closedAtUtc: nullableString(value.closedAtUtc, "closedAtUtc"),
     comments: requireArray(value.comments, "comments").map((item) => {
       const comment = requireRecord(item, "comment");
@@ -159,17 +168,21 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
     reopenedFrom: value.reopenedFrom === null ? null : decodeTicketLink(value.reopenedFrom),
     reopenedTickets: requireArray(value.reopenedTickets, "reopenedTickets").map(decodeTicketLink),
     resolvedAtUtc: nullableString(value.resolvedAtUtc, "resolvedAtUtc"),
-    statusHistory: requireArray(value.statusHistory, "statusHistory").map((item) => {
-      const history = requireRecord(item, "status history");
-      return {
-        actor: decodePerson(history.actor),
-        fromStatus: history.fromStatus === null ? null : decodeStatus(history.fromStatus),
-        id: requireString(history.id, "history.id"),
-        occurredAtUtc: requireString(history.occurredAtUtc, "history.occurredAtUtc"),
-        toStatus: decodeStatus(history.toStatus),
-        version: requireNumber(history.version, "history.version"),
-      };
-    }),
+    ...(Object.hasOwn(value, "statusHistory")
+      ? {
+          statusHistory: requireArray(value.statusHistory, "statusHistory").map((item) => {
+            const history = requireRecord(item, "status history");
+            return {
+              actor: decodePerson(history.actor),
+              fromStatus: history.fromStatus === null ? null : decodeStatus(history.fromStatus),
+              id: requireString(history.id, "history.id"),
+              occurredAtUtc: requireString(history.occurredAtUtc, "history.occurredAtUtc"),
+              toStatus: decodeStatus(history.toStatus),
+              version: requireNumber(history.version, "history.version"),
+            };
+          }),
+        }
+      : {}),
     tags: requireArray(value.tags, "tags").map((item) => {
       const tag = requireRecord(item, "tag");
       return { id: requireString(tag.id, "tag.id"), name: requireString(tag.name, "tag.name") };
@@ -198,15 +211,25 @@ export function decodeCustomers(body: unknown): readonly CustomerOption[] {
 function decodeTicketSummary(body: unknown): TicketSummary {
   const value = requireRecord(body, "ticket");
   const requester = requireRecord(value.requester, "ticket.requester");
+  const operationKeys = ["assignedAtUtc", "assignee", "queue"] as const;
+  const operationKeyCount = operationKeys.filter((key) => Object.hasOwn(value, key)).length;
+  if (operationKeyCount !== 0 && operationKeyCount !== operationKeys.length) {
+    throw new TypeError("ticket operational projection is incomplete.");
+  }
   return {
-    assignedAtUtc: nullableString(value.assignedAtUtc, "ticket.assignedAtUtc"),
-    assignee: decodeNullableAssignee(value.assignee),
+    ...(operationKeyCount === operationKeys.length
+      ? {
+          assignedAtUtc: nullableString(value.assignedAtUtc, "ticket.assignedAtUtc"),
+          assignee: decodeNullableAssignee(value.assignee),
+          queue: decodeNullableQueue(value.queue),
+        }
+      : {}),
+    assignmentStatus: decodeAssignmentStatus(value.assignmentStatus),
     createdAtUtc: requireString(value.createdAtUtc, "ticket.createdAtUtc"),
     firstResponseAtUtc: nullableString(value.firstResponseAtUtc, "ticket.firstResponseAtUtc"),
     id: requireString(value.id, "ticket.id"),
     number: requireNumber(value.number, "ticket.number"),
     priority: decodePriority(value.priority),
-    queue: decodeNullableQueue(value.queue),
     requester: {
       contactId: requireString(requester.contactId, "requester.contactId"),
       customerId: requireString(requester.customerId, "requester.customerId"),
@@ -219,6 +242,13 @@ function decodeTicketSummary(body: unknown): TicketSummary {
     updatedAtUtc: requireString(value.updatedAtUtc, "ticket.updatedAtUtc"),
     version: requireNumber(value.version, "ticket.version"),
   };
+}
+
+function decodeAssignmentStatus(value: unknown): TicketAssignmentStatus {
+  if (typeof value !== "string" || !ASSIGNMENT_STATUSES.includes(value as TicketAssignmentStatus)) {
+    throw new TypeError("ticket.assignmentStatus is invalid.");
+  }
+  return value as TicketAssignmentStatus;
 }
 
 function decodeNullableQueue(value: unknown): QueueReference | null {

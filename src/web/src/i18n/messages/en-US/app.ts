@@ -127,6 +127,7 @@ export const appMessagesEnUs = {
     back: "Back to tickets",
     columns: {
       assignee: "Assignee",
+      assignmentStatus: "Assignment status",
       number: "Ticket",
       priority: "Priority",
       queue: "Queue",
@@ -150,6 +151,10 @@ export const appMessagesEnUs = {
       place: "Place in queue",
       queue: "Queue",
       roundRobin: "Round robin",
+      status: {
+        ASSIGNED: "Assigned",
+        UNASSIGNED: "Awaiting assignment",
+      },
       takeOver: "Take over",
       title: "Queue and assignment",
       unassign: "Unassign",

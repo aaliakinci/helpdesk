@@ -215,6 +215,49 @@ describe("queue and assignment operations", () => {
     );
   });
 
+  it("returns only assignment state to requesters without operational assignment data", async () => {
+    const created = await createTicket("requester-assignment-projection");
+    const assigned = await assignments.assign(owner, created.id, {
+      assigneeMembershipId: agent.membershipId,
+      expectedVersion: created.version,
+      queueId: queue.id,
+    });
+
+    const requesterDetail = await ticketQueries.getTicket(requester, assigned.id);
+    expect(requesterDetail.assignmentStatus).toBe("ASSIGNED");
+    expect(requesterDetail).not.toHaveProperty("assignedAtUtc");
+    expect(requesterDetail).not.toHaveProperty("assignee");
+    expect(requesterDetail).not.toHaveProperty("queue");
+    expect(requesterDetail).not.toHaveProperty("assignmentHistory");
+    expect(requesterDetail).not.toHaveProperty("statusHistory");
+
+    const requesterPage = await ticketQueries.listTickets(requester, {
+      assignment: "UNASSIGNED",
+      page: 1,
+      pageSize: 20,
+      priority: null,
+      queueId: randomUUID(),
+      search: assigned.subject,
+      sortBy: "updatedAt",
+      sortDirection: "desc",
+      status: null,
+    });
+    expect(requesterPage.items).toHaveLength(1);
+    expect(requesterPage.items[0]).toMatchObject({
+      assignmentStatus: "ASSIGNED",
+      id: assigned.id,
+    });
+    expect(requesterPage.items[0]).not.toHaveProperty("assignee");
+    expect(requesterPage.items[0]).not.toHaveProperty("queue");
+
+    const staffDetail = await ticketQueries.getTicket(owner, assigned.id);
+    expect(staffDetail).toMatchObject({
+      assignmentStatus: "ASSIGNED",
+      assignee: { membershipId: agent.membershipId },
+      queue: { id: queue.id },
+    });
+  });
+
   it("writes assignment history, ticket revision, audit, and outbox in one graph", async () => {
     const created = await createTicket("assignment-graph");
     const queued = await assignments.setQueue(owner, created.id, {

@@ -74,7 +74,7 @@ export function TicketActivity({
           ))}
         </Stack>
       </Box>
-      {mode === "staff" && detail.assignmentHistory.length > 0 && (
+      {mode === "staff" && (detail.assignmentHistory?.length ?? 0) > 0 && (
         <Box id={`${id}.assignment-history`}>
           <Typography
             id={`${id}.assignment-history.title`}
@@ -85,7 +85,7 @@ export function TicketActivity({
             {t("app:tickets.assignment.history")}
           </Typography>
           <Stack id={`${id}.assignment-history.items`} spacing={1}>
-            {detail.assignmentHistory.map((entry) => (
+            {detail.assignmentHistory?.map((entry) => (
               <Card
                 key={entry.id}
                 id={`${id}.assignment-history.${entry.id}`}
@@ -101,13 +101,13 @@ export function TicketActivity({
           </Stack>
         </Box>
       )}
-      {mode === "staff" && detail.statusHistory.length > 0 && (
+      {mode === "staff" && (detail.statusHistory?.length ?? 0) > 0 && (
         <Box id={`${id}.status-history`}>
           <Typography id={`${id}.status-history.title`} component="h2" variant="h5" sx={{ mb: 2 }}>
             {t("app:tickets.statusHistory")}
           </Typography>
           <Stack id={`${id}.status-history.items`} spacing={1}>
-            {detail.statusHistory.map((entry) => (
+            {detail.statusHistory?.map((entry) => (
               <Card
                 key={entry.id}
                 id={`${id}.status-history.${entry.id}`}

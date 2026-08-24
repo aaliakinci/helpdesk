@@ -131,6 +131,7 @@ export const appMessagesTrTr = {
     back: "Ticket listesine dön",
     columns: {
       assignee: "Atanan kişi",
+      assignmentStatus: "Atama durumu",
       number: "Ticket",
       priority: "Öncelik",
       queue: "Queue",
@@ -154,6 +155,10 @@ export const appMessagesTrTr = {
       place: "Queue'ya al",
       queue: "Queue",
       roundRobin: "Round robin",
+      status: {
+        ASSIGNED: "Atandı",
+        UNASSIGNED: "Atama bekliyor",
+      },
       takeOver: "Üstlen",
       title: "Queue ve atama",
       unassign: "Atamayı kaldır",
