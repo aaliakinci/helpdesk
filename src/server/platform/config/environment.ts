@@ -23,6 +23,7 @@ export interface PlatformEnvironment {
   readonly refreshCookieSecure: boolean;
   readonly refreshSessionTtlDays: number;
   readonly redisUrl: string;
+  readonly realtimeAuthRecheckMs: number;
   readonly webOrigin: string;
   readonly workerHealthPort: number;
 }
@@ -111,6 +112,13 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
       90,
     ),
     redisUrl: requireUrl(environment.REDIS_URL, "REDIS_URL", ["redis:", "rediss:"]),
+    realtimeAuthRecheckMs: parseInteger(
+      environment.REALTIME_AUTH_RECHECK_MS,
+      5_000,
+      "REALTIME_AUTH_RECHECK_MS",
+      1_000,
+      60_000,
+    ),
     webOrigin: requireUrl(environment.WEB_ORIGIN ?? "http://127.0.0.1:5173", "WEB_ORIGIN", [
       "http:",
       "https:",

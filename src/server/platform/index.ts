@@ -1,6 +1,10 @@
 export { PlatformConfigService, parseEnvironment } from "./config/environment.js";
 export { RabbitMqConnectionService } from "./connections/rabbitmq-connection.service.js";
 export { RedisConnectionService } from "./connections/redis-connection.service.js";
+export {
+  SessionInvalidationService,
+  type SessionInvalidation,
+} from "./connections/session-invalidation.service.js";
 export { PrismaService } from "./database/prisma.service.js";
 export { HealthService } from "./health/health.service.js";
 export type { HealthCheckResult, LivenessReport, ReadinessReport } from "./health/health.types.js";

@@ -4,11 +4,16 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 
-import { PlatformConfigService, PrismaService } from "../../../platform/index.js";
+import {
+  PlatformConfigService,
+  PrismaService,
+  SessionInvalidationService,
+} from "../../../platform/index.js";
 import type {
   AuthenticatedIdentity,
   AuthenticationEnvelope,
@@ -61,6 +66,7 @@ export class IdentityService {
     private readonly refreshTokens: RefreshTokenService,
     private readonly loginRateLimiter: LoginRateLimiter,
     private readonly config: PlatformConfigService,
+    @Optional() private readonly sessionInvalidations?: SessionInvalidationService,
   ) {}
 
   public async login(input: {
@@ -171,6 +177,7 @@ export class IdentityService {
         kind: "success" as const,
         membership: current.membership,
         memberships,
+        previousSessionId: current.id,
         sessionId: session.id,
         user: current.user,
         expiresAt: current.expiresAt,
@@ -178,6 +185,7 @@ export class IdentityService {
     });
 
     if (outcome.kind === "invalid") throw new UnauthorizedException("Session is invalid.");
+    await this.sessionInvalidations?.publish({ id: outcome.previousSessionId, scope: "SESSION" });
     return this.createEnvelope(
       outcome.user,
       outcome.membership,
@@ -217,10 +225,18 @@ export class IdentityService {
       select: { familyId: true },
     });
     if (!session) return;
+    const family = await this.prisma.userSession.findMany({
+      select: { id: true },
+      where: { familyId: session.familyId, revokedAt: null },
+    });
     await this.prisma.userSession.updateMany({
       where: { familyId: session.familyId, revokedAt: null },
       data: { revokedAt: new Date(), revokeReason: "logout" },
     });
+    const invalidations = this.sessionInvalidations;
+    if (invalidations) {
+      await Promise.all(family.map(({ id }) => invalidations.publish({ id, scope: "SESSION" })));
+    }
   }
 
   public async revokeAll(identity: AuthenticatedIdentity): Promise<void> {
@@ -228,6 +244,7 @@ export class IdentityService {
       where: { userId: identity.userId, revokedAt: null },
       data: { revokedAt: new Date(), revokeReason: "revoke-all" },
     });
+    await this.sessionInvalidations?.publish({ id: identity.userId, scope: "USER" });
   }
 
   public async switchTenant(
@@ -288,6 +305,7 @@ export class IdentityService {
     });
 
     if (outcome.kind === "invalid") throw new UnauthorizedException("Tenant switch is invalid.");
+    await this.sessionInvalidations?.publish({ id: identity.sessionId, scope: "SESSION" });
     return this.createEnvelope(
       outcome.user,
       outcome.membership,
@@ -305,6 +323,22 @@ export class IdentityService {
       orderBy: { tenant: { name: "asc" } },
     });
     return memberships.map((membership) => toTenantOption(membership as MembershipView));
+  }
+
+  public async listActiveQueueIds(
+    tenantId: string,
+    membershipId: string,
+  ): Promise<readonly string[]> {
+    const memberships = await this.prisma.queueMember.findMany({
+      select: { queueId: true },
+      where: {
+        membershipId,
+        queue: { status: "ACTIVE" },
+        status: "ACTIVE",
+        tenantId,
+      },
+    });
+    return memberships.map((membership) => membership.queueId);
   }
 
   public async listMemberships(identity: AuthenticatedIdentity): Promise<readonly object[]> {
@@ -379,6 +413,7 @@ export class IdentityService {
     }
     if (result.kind === "last-owner")
       throw new ConflictException("The final owner cannot be changed.");
+    await this.sessionInvalidations?.publish({ id: membershipId, scope: "MEMBERSHIP" });
     return toMembershipResponse(result.membership);
   }
 
@@ -429,6 +464,7 @@ export class IdentityService {
     if (result.kind === "missing") throw new NotFoundException("Membership was not found.");
     if (result.kind === "last-owner")
       throw new ConflictException("The final owner cannot be disabled.");
+    await this.sessionInvalidations?.publish({ id: membershipId, scope: "MEMBERSHIP" });
     return toMembershipResponse(result.membership);
   }
 

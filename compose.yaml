@@ -73,6 +73,7 @@ services:
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
       REFRESH_SESSION_TTL_DAYS: ${REFRESH_SESSION_TTL_DAYS:-7}
       REDIS_URL: redis://redis:6379
+      REALTIME_AUTH_RECHECK_MS: ${REALTIME_AUTH_RECHECK_MS:-5000}
       WEB_ORIGIN: http://127.0.0.1:${WEB_PORT:-5173}
     depends_on:
       postgres:

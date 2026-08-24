@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/features/auth";
 import { useAppTranslation } from "@/i18n";
+import { useRealtime } from "@/features/realtime";
 
 import {
   createQueue,
@@ -24,6 +25,7 @@ import type { CreateQueueFormValues } from "../model/queueForms";
 export function useQueueOperations() {
   const auth = useAuth();
   const { t } = useAppTranslation();
+  const realtime = useRealtime();
   const role = auth.session?.activeTenant?.role;
   const canManage = role === "OWNER" || role === "MANAGER";
   const [queues, setQueues] = useState<readonly QueueView[]>([]);
@@ -63,7 +65,7 @@ export function useQueueOperations() {
         if (!controller.signal.aborted) setLoading(false);
       }
     }
-  }, [canManage, revision, t]);
+  }, [canManage, realtime.eventRevision, realtime.reconciliationRevision, revision, t]);
 
   const perform = useCallback(
     async (action: () => Promise<unknown>): Promise<boolean> => {

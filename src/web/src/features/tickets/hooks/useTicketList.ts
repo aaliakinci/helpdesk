@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth";
 import { listQueues, type QueueView } from "@/features/operations/catalog";
 import { useAppTranslation } from "@/i18n";
+import { useRealtime } from "@/features/realtime";
 
 import { listTickets } from "../api/ticketApi";
 import type { TicketPage } from "../api/ticketContract";
@@ -20,6 +21,7 @@ export function useTicketList({ mode }: { readonly mode: TicketMode }) {
   const location = useLilyLocation();
   const navigate = useLilyNavigate();
   const { locale, t } = useAppTranslation();
+  const realtime = useRealtime();
   const query = useMemo(() => parseTicketListQuery(location.search), [location.search]);
   const [searchDraftState, setSearchDraftState] = useState(() => ({
     source: query.search,
@@ -66,7 +68,7 @@ export function useTicketList({ mode }: { readonly mode: TicketMode }) {
         if (!controller.signal.aborted) setLoading(false);
       }
     }
-  }, [mode, query, revision, t]);
+  }, [mode, query, realtime.eventRevision, realtime.reconciliationRevision, revision, t]);
 
   function navigateWithQuery(next: TicketListQuery): void {
     void navigate(

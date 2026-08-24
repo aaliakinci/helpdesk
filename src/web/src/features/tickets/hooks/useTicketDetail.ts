@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/features/auth";
 import { listQueues, type QueueView } from "@/features/operations/catalog";
 import { useAppTranslation } from "@/i18n";
+import { useRealtime } from "@/features/realtime";
 
 import {
   addTicketComment,
@@ -30,6 +31,7 @@ export function useTicketDetail({
   const auth = useAuth();
   const navigate = useLilyNavigate();
   const { locale, t } = useAppTranslation();
+  const realtime = useRealtime();
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [queues, setQueues] = useState<readonly QueueView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export function useTicketDetail({
         if (!controller.signal.aborted) setLoading(false);
       }
     }
-  }, [mode, revision, t, ticketId]);
+  }, [mode, realtime.eventRevision, realtime.reconciliationRevision, revision, t, ticketId]);
 
   const perform = useCallback(
     async (action: () => Promise<TicketDetail>): Promise<TicketDetail | null> => {

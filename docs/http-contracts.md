@@ -82,7 +82,9 @@ returns `409` and does not partially update the aggregate or history.
 - `POST /api/v1/tickets` creates a ticket, initial status history, audit entry, and
   `ticket.created.v1` outbox message in one transaction.
 - `GET /api/v1/tickets/:ticketId` applies role-specific projection. Requesters can read only tickets
-  attached to their server-derived customer contact and never receive internal comments.
+  attached to their server-derived customer contact and never receive internal comments, queue or
+  assignee identities, assignment history, or staff status history. Their list and detail
+  projections expose only `assignmentStatus` as `ASSIGNED` or `UNASSIGNED`.
 - `POST /api/v1/tickets/:ticketId/comments` creates a public reply or staff-only internal note and
   requires `expectedVersion`.
 - `PATCH /api/v1/tickets/:ticketId/status` applies the fixed state machine and requires
@@ -121,3 +123,15 @@ queue/assignee projection, immutable assignment history, business audit entry, a
 serializes round-robin cursor changes. Composite foreign keys prevent cross-tenant queue,
 membership, and ticket relationships; application policy additionally requires an active Agent
 membership in the selected queue.
+
+## Notifications
+
+- `GET /api/v1/notifications` returns the newest 20 notifications and unread count for the exact
+  active `(tenant_id, membership_id)` pair.
+- `POST /api/v1/notifications/:notificationId/read` marks one owned notification as read.
+- `POST /api/v1/notifications/read-all` marks all unread notifications for the active membership as
+  read.
+
+Notification payloads are projected through an allowlist. Raw JSON stored by background consumers
+is not returned directly, and a notification owned by another tenant or membership produces the
+same non-disclosing `404` as an unknown identifier.

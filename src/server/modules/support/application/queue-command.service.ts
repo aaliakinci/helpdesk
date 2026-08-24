@@ -3,9 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 
-import { PrismaService } from "../../../platform/index.js";
+import { PrismaService, SessionInvalidationService } from "../../../platform/index.js";
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
 import { hasPermission } from "../../identity/domain/permissions.js";
 import type { QueueView } from "./support.types.js";
@@ -18,6 +19,7 @@ export class QueueCommandService {
     private readonly prisma: PrismaService,
     private readonly events: SupportEventWriter,
     private readonly queries: QueueQueryService,
+    @Optional() private readonly sessionInvalidations?: SessionInvalidationService,
   ) {}
 
   public async createQueue(
@@ -64,7 +66,7 @@ export class QueueCommandService {
   ): Promise<QueueView> {
     this.assertManage(identity);
     try {
-      await this.prisma.$transaction(async (transaction) => {
+      const invalidatedMembershipIds = await this.prisma.$transaction(async (transaction) => {
         const queue = await transaction.queue.findUnique({
           where: { tenantId_id: { id: queueId, tenantId: identity.tenantId } },
         });
@@ -92,7 +94,21 @@ export class QueueCommandService {
             version: input.expectedVersion + 1,
           },
         });
+        if (queue.status === input.status) return [];
+        const members = await transaction.queueMember.findMany({
+          select: { membershipId: true },
+          where: { queueId: queue.id, status: "ACTIVE", tenantId: identity.tenantId },
+        });
+        return members.map((member) => member.membershipId);
       });
+      const invalidations = this.sessionInvalidations;
+      if (invalidations) {
+        await Promise.all(
+          invalidatedMembershipIds.map((membershipId) =>
+            invalidations.publish({ id: membershipId, scope: "MEMBERSHIP" }),
+          ),
+        );
+      }
       return this.queries.getQueue(identity, queueId);
     } catch (error: unknown) {
       if (isPrismaErrorCode(error, "P2002")) {
@@ -175,6 +191,7 @@ export class QueueCommandService {
         },
       });
     });
+    await this.sessionInvalidations?.publish({ id: input.membershipId, scope: "MEMBERSHIP" });
     return this.queries.getQueue(identity, queueId);
   }
 

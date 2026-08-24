@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
     "/api": apiProxyTarget,
     "/health": apiProxyTarget,
     "/openapi": apiProxyTarget,
+    "/socket.io": { target: apiProxyTarget, ws: true },
   };
 
   return {

@@ -44,7 +44,8 @@ describe("identity security primitives", () => {
       membershipId: "00000000-0000-4000-8000-000000000501",
       tenantId: "00000000-0000-4000-8000-000000000101",
     });
-    const tampered = `${issued.token.slice(0, -1)}${issued.token.endsWith("a") ? "b" : "a"}`;
+    const [header, payload, signature = ""] = issued.token.split(".");
+    const tampered = `${header}.${payload}.${signature.startsWith("a") ? "b" : "a"}${signature.slice(1)}`;
     expect(service.verify(tampered)).toBeNull();
   });
 

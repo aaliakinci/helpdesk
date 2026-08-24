@@ -5,11 +5,16 @@ import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
 
 import { useAuth } from "@/features/auth/session";
+import { useRealtimeLifecycle } from "@/features/realtime";
 import { useAppTranslation } from "@/i18n";
 import { APP_ROUTES, appGuardRegistry, type AppRouterState } from "@/router";
 
 export function App() {
   const { initialized, session } = useAuth();
+  useRealtimeLifecycle(
+    session?.accessToken ?? null,
+    session ? `${session.activeTenant.id}:${session.user.id}` : null,
+  );
   const { t } = useAppTranslation();
   if (!initialized) {
     return (

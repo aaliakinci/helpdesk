@@ -35,10 +35,15 @@ The worker declares durable infrastructure on startup:
 - retry queues: 1 second, 5 seconds, and 30 seconds
 - dead-letter exchange: `helpdesk.dlx.v1`
 - dead-letter queue: `helpdesk.worker.dlq.v1`
+- realtime consumer queue: `helpdesk.realtime.v1`
+- realtime retry queues: 1 second, 5 seconds, and 30 seconds
+- realtime dead-letter queue: `helpdesk.realtime.dlq.v1`
 
 Deliveries use manual acknowledgements. Successful work is acknowledged after its transaction commits. A failed delivery is published to a bounded retry queue and the original is acknowledged only after RabbitMQ confirms that transfer. After `MESSAGING_MAX_ATTEMPTS`, it is confirmed into the dead-letter queue. If the transfer itself fails, the original delivery is negatively acknowledged and requeued.
 
 On shutdown the worker cancels new deliveries, waits for in-flight handlers to finish their ack/nack decision, closes its channels, and then closes the shared connection.
+
+The support API consumes the separate realtime queue. Its retry exchange returns only to the realtime queue, so a realtime retry cannot re-run worker consumers. The API resolves authorized Socket.IO rooms from current PostgreSQL state and publishes only an invalidation payload; Redis then fans that payload out across API instances. Realtime bridge startup is best-effort so an unavailable broker does not make the REST API unavailable.
 
 ## Ticket creation consumers
 

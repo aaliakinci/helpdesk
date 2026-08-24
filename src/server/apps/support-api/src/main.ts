@@ -12,6 +12,7 @@ import {
   writeStructuredLog,
 } from "../../../platform/index.js";
 import { AppModule } from "./app.module.js";
+import { RedisIoAdapter } from "../../../modules/realtime/index.js";
 import { ProblemDetailsFilter } from "./problem-details.filter.js";
 
 async function bootstrap(): Promise<void> {
@@ -20,6 +21,9 @@ async function bootstrap(): Promise<void> {
     logger,
   });
   const config = app.get(PlatformConfigService);
+  const realtimeAdapter = new RedisIoAdapter(app, config);
+  await realtimeAdapter.connectToRedis();
+  app.useWebSocketAdapter(realtimeAdapter);
 
   app.enableCors({
     credentials: true,

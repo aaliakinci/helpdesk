@@ -7,6 +7,8 @@ import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
 import { useState, type ReactNode } from "react";
 
 import { useAppTranslation } from "@/i18n";
+import { NotificationCenter, useNotifications } from "@/features/notifications";
+import { useRealtime } from "@/features/realtime";
 
 import { useAuth } from "../model/authContext";
 import { workspaceNavigationFor, type WorkspacePath } from "../model/workspaceNavigation";
@@ -23,6 +25,8 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
   const navigate = useLilyNavigate();
   const { changeLocale, locale, t } = useAppTranslation();
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const notifications = useNotifications();
+  const realtime = useRealtime();
   const online = useOnlineStatus();
   const session = auth.session;
   if (!session) return null;
@@ -114,7 +118,7 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
             aria-haspopup="true"
             onClick={() => setNotificationOpen((value) => !value)}
           >
-            {t("app:shell.notifications")} (0)
+            {t("app:shell.notifications")} ({notifications.unreadCount})
           </Button>
           <Stack id={`${id}.locale`} direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
             <Typography id={`${id}.locale.label`} component="span" variant="body2">
@@ -147,9 +151,15 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
             aria-label={t("app:shell.notificationCenter")}
             sx={{ maxWidth: shellWidth, mx: "auto", px: { xs: 2, sm: 3 }, pb: 2 }}
           >
-            <Alert id={`${id}.notifications.empty`} severity="info">
-              {t("app:shell.noNotifications")}
-            </Alert>
+            <Typography
+              id={`${id}.notifications.realtime-status`}
+              component="p"
+              variant="caption"
+              sx={{ color: "text.secondary", mb: 1 }}
+            >
+              {t(`app:shell.realtime.${realtime.status}`)}
+            </Typography>
+            <NotificationCenter controller={notifications} id={`${id}.notifications.items`} />
           </Box>
         )}
       </Box>
