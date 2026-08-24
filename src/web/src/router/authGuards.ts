@@ -50,3 +50,37 @@ export class AuditorGuard extends RoleGuard {
   readonly id = "auditor";
   readonly roles = ["AUDITOR"];
 }
+
+abstract class PermissionGuard extends RouteGuard<AppRouterState> {
+  abstract readonly permission: string;
+  canActivate(context: GuardContext<AppRouterState>): GuardResult {
+    return context.state?.permissions.includes(this.permission)
+      ? { allow: true }
+      : { allow: false, redirectTo: "/", replace: true, reason: "permission-required" };
+  }
+}
+
+export class TicketReadGuard extends PermissionGuard {
+  readonly id = "ticket-read";
+  readonly permission = "tickets.read";
+}
+
+export class OwnTicketReadGuard extends PermissionGuard {
+  readonly id = "own-ticket-read";
+  readonly permission = "tickets.read-own";
+}
+
+export class TicketCreateGuard extends PermissionGuard {
+  readonly id = "ticket-create";
+  readonly permission = "tickets.create";
+}
+
+export class QueueReadGuard extends PermissionGuard {
+  readonly id = "queue-read";
+  readonly permission = "queues.read";
+}
+
+export class AuditReadGuard extends PermissionGuard {
+  readonly id = "audit-read";
+  readonly permission = "audit.read";
+}

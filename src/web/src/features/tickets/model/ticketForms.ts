@@ -81,10 +81,11 @@ export function createTicketFormDefinition(
 
 export function replyFormDefinition(
   t: (key: string) => string,
+  visibility: TicketCommentVisibility = "PUBLIC",
 ): LilyFormDefinition<ReplyFormValues> {
   return defineLilyForm<ReplyFormValues>({
     id: "tickets.reply.form",
-    defaultValues: emptyReplyValues,
+    defaultValues: { body: "", visibility },
     containerProps: { spacing: 2 },
     fields: [
       {
@@ -95,17 +96,6 @@ export function replyFormDefinition(
         minRows: 3,
         required: true,
         validators: { onSubmit: bounded(1, 10_000, t("app:tickets.reply.validation")) },
-      },
-      {
-        kind: "select",
-        name: "visibility",
-        label: t("app:tickets.reply.visibility"),
-        fullWidth: true,
-        required: true,
-        options: [
-          { id: "PUBLIC", label: t("app:tickets.reply.public"), value: "PUBLIC" },
-          { id: "INTERNAL", label: t("app:tickets.reply.internal"), value: "INTERNAL" },
-        ],
       },
     ],
     actions: [

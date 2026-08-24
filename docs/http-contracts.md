@@ -75,9 +75,10 @@ returns `409` and does not partially update the aggregate or history.
 
 ## Tickets
 
-- `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `status`, `priority`, `queueId`,
-  `assignment`, `sortBy`, and `sortDirection` parameters. `assignment` accepts `ALL`, `MINE`, or
-  `UNASSIGNED`.
+- `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `search`, `status`, `priority`,
+  `queueId`, `assignment`, `sortBy`, and `sortDirection` parameters. `assignment` accepts `ALL`,
+  `MINE`, or `UNASSIGNED`. Search covers ticket number, subject, description, and requester fields
+  inside the server-derived tenant/requester scope.
 - `POST /api/v1/tickets` creates a ticket, initial status history, audit entry, and
   `ticket.created.v1` outbox message in one transaction.
 - `GET /api/v1/tickets/:ticketId` applies role-specific projection. Requesters can read only tickets

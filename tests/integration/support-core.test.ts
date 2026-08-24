@@ -300,6 +300,48 @@ describe("customer and ticket transaction core", () => {
     );
   });
 
+  it("searches server-side within the caller's tenant and requester scope", async () => {
+    const marker = `search-${randomUUID()}`;
+    const own = await createRequesterTicket(`Printer ${marker}`);
+    const globexCustomer = await prisma.customer.create({
+      data: { name: `Globex ${marker}`, tenantId: DEMO_TENANTS.globex },
+    });
+    createdCustomerIds.add(globexCustomer.id);
+    const globexContact = await prisma.customerContact.create({
+      data: {
+        customerId: globexCustomer.id,
+        displayName: marker,
+        email: `${marker}@example.test`,
+        tenantId: DEMO_TENANTS.globex,
+      },
+    });
+    const foreign = await ticketCommands.createTicket(globexAgent, {
+      description: marker,
+      priority: "NORMAL",
+      requesterContactId: globexContact.id,
+      subject: `Foreign ${marker}`,
+    });
+    createdTicketIds.add(foreign.id);
+
+    const input = {
+      assignment: "ALL" as const,
+      page: 1,
+      pageSize: 20,
+      priority: null,
+      queueId: null,
+      search: marker,
+      sortBy: "updatedAt" as const,
+      sortDirection: "desc" as const,
+      status: null,
+    };
+    await expect(ticketQueries.listTickets(agent, input)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: own.id })],
+      total: 1,
+    });
+    const requesterResult = await ticketQueries.listTickets(requester, input);
+    expect(requesterResult.items.every((ticket) => ticket.id !== foreign.id)).toBe(true);
+  });
+
   async function authenticate(email: string, tenantId: string, clientAddress: string) {
     const login = await identityService.login({ clientAddress, email, password, tenantId });
     return identityService.authenticateAccessToken(login.body.accessToken ?? "");

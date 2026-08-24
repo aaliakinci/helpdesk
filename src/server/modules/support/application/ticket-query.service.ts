@@ -49,6 +49,36 @@ export class TicketQueryService {
           : input.assignment === "UNASSIGNED"
             ? [{ currentAssigneeMembershipId: null }]
             : []),
+        ...(input.search
+          ? [
+              {
+                OR: [
+                  { subject: { contains: input.search, mode: "insensitive" as const } },
+                  { description: { contains: input.search, mode: "insensitive" as const } },
+                  {
+                    requesterContact: {
+                      is: {
+                        OR: [
+                          { displayName: { contains: input.search, mode: "insensitive" as const } },
+                          { email: { contains: input.search, mode: "insensitive" as const } },
+                          {
+                            customer: {
+                              is: {
+                                name: { contains: input.search, mode: "insensitive" as const },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  ...(/^[1-9][0-9]*$/u.test(input.search)
+                    ? [{ number: Number(input.search) }]
+                    : []),
+                ],
+              },
+            ]
+          : []),
       ],
       ...(input.priority ? { priority: input.priority } : {}),
       ...(input.queueId ? { currentQueueId: input.queueId } : {}),

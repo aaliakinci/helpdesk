@@ -9,6 +9,7 @@ import {
   type TicketCommentVisibility,
   type TicketDetail,
   type TicketPage,
+  type TicketPriority,
   type TicketStatus,
 } from "./ticketContract";
 
@@ -16,22 +17,28 @@ const mutationMetadata = { operationName: "tickets.mutation", replay: "deny" as 
 
 export interface TicketListFilters {
   readonly assignment: "ALL" | "MINE" | "UNASSIGNED";
+  readonly page: number;
+  readonly pageSize: number;
+  readonly priority: TicketPriority | null;
   readonly queueId: string | null;
+  readonly search: string;
+  readonly sortBy: "createdAt" | "number" | "priority" | "updatedAt";
+  readonly sortDirection: "asc" | "desc";
+  readonly status: TicketStatus | null;
 }
 
-export function listTickets(
-  page: number,
-  filters: TicketListFilters,
-  signal?: AbortSignal,
-): Promise<TicketPage> {
+export function listTickets(filters: TicketListFilters, signal?: AbortSignal): Promise<TicketPage> {
   const query = new URLSearchParams({
     assignment: filters.assignment,
-    page: String(page),
-    pageSize: "10",
-    sortBy: "updatedAt",
-    sortDirection: "desc",
+    page: String(filters.page),
+    pageSize: String(filters.pageSize),
+    sortBy: filters.sortBy,
+    sortDirection: filters.sortDirection,
   });
+  if (filters.priority) query.set("priority", filters.priority);
   if (filters.queueId) query.set("queueId", filters.queueId);
+  if (filters.search) query.set("search", filters.search);
+  if (filters.status) query.set("status", filters.status);
   return appHttpClient.getData<TicketPage>(`/api/v1/tickets?${query.toString()}`, {
     decode: decodeTicketPage,
     metadata: { operationName: "tickets.list" },

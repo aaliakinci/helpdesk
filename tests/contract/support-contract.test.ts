@@ -55,6 +55,7 @@ describe("customer and ticket HTTP contracts", () => {
         page: "2",
         pageSize: "25",
         priority: "URGENT",
+        search: "  printer  ",
         sortBy: "number",
         sortDirection: "asc",
         status: "OPEN",
@@ -65,11 +66,13 @@ describe("customer and ticket HTTP contracts", () => {
       pageSize: 25,
       priority: "URGENT",
       queueId: null,
+      search: "printer",
       sortBy: "number",
       sortDirection: "asc",
       status: "OPEN",
     });
     expect(() => decodeTicketListQuery({ pageSize: "101" })).toThrow("allowed range");
+    expect(() => decodeTicketListQuery({ search: "x".repeat(121) })).toThrow("invalid length");
   });
 
   it("strictly decodes queue and assignment writes without accepting tenant scope", () => {

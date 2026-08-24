@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
 import { AccessTokenGuard, CurrentIdentity } from "../../identity/presentation/identity-http.js";
@@ -30,6 +30,23 @@ export class TicketsController {
 
   @Get()
   @ApiOperation({ summary: "List role-projected active-tenant tickets" })
+  @ApiQuery({ name: "assignment", required: false, enum: ["ALL", "MINE", "UNASSIGNED"] })
+  @ApiQuery({ name: "page", required: false, type: Number })
+  @ApiQuery({ name: "pageSize", required: false, type: Number })
+  @ApiQuery({ name: "priority", required: false, enum: ["LOW", "NORMAL", "HIGH", "URGENT"] })
+  @ApiQuery({ name: "queueId", required: false, type: String })
+  @ApiQuery({ name: "search", required: false, type: String })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    enum: ["createdAt", "number", "priority", "updatedAt"],
+  })
+  @ApiQuery({ name: "sortDirection", required: false, enum: ["asc", "desc"] })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    enum: ["NEW", "OPEN", "PENDING", "RESOLVED", "CLOSED"],
+  })
   public list(
     @CurrentIdentity() identity: AuthenticatedIdentity,
     @Query() query: Readonly<Record<string, unknown>>,

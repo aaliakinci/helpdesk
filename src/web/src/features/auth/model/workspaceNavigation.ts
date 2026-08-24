@@ -49,6 +49,9 @@ export function workspaceNavigationFor(
     allowed.has("queues.read")
       ? { labelKey: "app:navigation.queues", path: "/workspace/queues" as const }
       : null,
+    allowed.has("audit.read")
+      ? { labelKey: "app:navigation.audit", path: "/audit" as const }
+      : null,
     { labelKey: "app:navigation.account", path: "/account" as const },
   ].filter((item) => item !== null);
 }

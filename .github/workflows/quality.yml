@@ -65,3 +65,19 @@ jobs:
         run: npm run db:seed
       - name: Verify infrastructure integration
         run: npm run test:integration
+      - name: Install Chromium for the browser quality gate
+        run: npx playwright install --with-deps chromium
+      - name: Verify responsive and accessible web routes
+        run: |
+          npm run start:api > /tmp/helpdesk-api.log 2>&1 &
+          api_pid=$!
+          npm run dev:web > /tmp/helpdesk-web.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$api_pid" "$web_pid"' EXIT
+          for attempt in $(seq 1 60); do
+            if node -e "fetch('http://127.0.0.1:8080/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" && node -e "fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              break
+            fi
+            sleep 1
+          done
+          npm run test:e2e:accessibility

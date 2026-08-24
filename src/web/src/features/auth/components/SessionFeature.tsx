@@ -1,9 +1,10 @@
 import { useLilyNavigate } from "@lily_platform/lily_ui/router";
+import { Alert } from "@lily_platform/lily_ui/ui/atoms/Alert";
 import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
 import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useAppTranslation } from "@/i18n";
 
@@ -20,6 +21,8 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
   const auth = useAuth();
   const navigate = useLilyNavigate();
   const { changeLocale, locale, t } = useAppTranslation();
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const online = useOnlineStatus();
   const session = auth.session;
   if (!session) return null;
 
@@ -28,6 +31,8 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
     session.activeTenant.permissions,
   );
   const mainId = `${id}.main`;
+  const requesterShell = session.activeTenant.role === "REQUESTER";
+  const shellWidth = requesterShell ? 960 : 1280;
 
   return (
     <Box id={id} sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -60,7 +65,7 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
           spacing={2}
           sx={{
             alignItems: { xs: "stretch", lg: "center" },
-            maxWidth: 1280,
+            maxWidth: shellWidth,
             mx: "auto",
             px: { xs: 2, sm: 3 },
             py: 1.5,
@@ -68,7 +73,7 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
         >
           <Box id={`${id}.brand`} sx={{ minWidth: 210 }}>
             <Typography id={`${id}.brand.name`} component="span" variant="h6">
-              {t("app:brand")}
+              {t(requesterShell ? "app:shell.portalBrand" : "app:brand")}
             </Typography>
             <Typography
               id={`${id}.brand.tenant`}
@@ -99,6 +104,17 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
               </Button>
             ))}
           </Stack>
+          <Button
+            id={`${id}.notifications.toggle`}
+            size="small"
+            variant={notificationOpen ? "outlined" : "text"}
+            aria-controls={`${id}.notifications.panel`}
+            aria-expanded={notificationOpen}
+            aria-haspopup="true"
+            onClick={() => setNotificationOpen((value) => !value)}
+          >
+            {t("app:shell.notifications")} (0)
+          </Button>
           <Stack id={`${id}.locale`} direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
             <Typography id={`${id}.locale.label`} component="span" variant="body2">
               {t("app:shell.language")}
@@ -123,17 +139,57 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
             </Button>
           </Stack>
         </Stack>
+        {notificationOpen && (
+          <Box
+            id={`${id}.notifications.panel`}
+            role="region"
+            aria-label={t("app:shell.notificationCenter")}
+            sx={{ maxWidth: shellWidth, mx: "auto", px: { xs: 2, sm: 3 }, pb: 2 }}
+          >
+            <Alert id={`${id}.notifications.empty`} severity="info">
+              {t("app:shell.noNotifications")}
+            </Alert>
+          </Box>
+        )}
       </Box>
+      {!online && (
+        <Alert id={`${id}.offline`} severity="warning">
+          {t("app:shell.offline")}
+        </Alert>
+      )}
       <Box
         id={mainId}
         component="main"
         tabIndex={-1}
-        sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, py: { xs: 4, md: 6 } }}
+        sx={{
+          maxWidth: shellWidth,
+          minWidth: 0,
+          mx: "auto",
+          overflowX: "clip",
+          px: { xs: 2, sm: 3 },
+          py: { xs: 3, md: 5 },
+        }}
       >
         {children}
       </Box>
     </Box>
   );
+}
+
+function useOnlineStatus(): boolean {
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return online;
 }
 
 function pathId(path: WorkspacePath): string {

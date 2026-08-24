@@ -97,6 +97,7 @@ export interface TicketListInput {
   readonly pageSize: number;
   readonly priority: TicketPriority | null;
   readonly queueId: string | null;
+  readonly search: string | null;
   readonly sortBy: "createdAt" | "number" | "priority" | "updatedAt";
   readonly sortDirection: "asc" | "desc";
   readonly status: TicketStatus | null;

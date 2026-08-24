@@ -7,10 +7,15 @@ import { SystemStatusPage } from "@/pages/SystemStatusPage";
 
 import {
   AnonymousGuard,
+  AuditReadGuard,
   AuditorGuard,
   AuthenticatedGuard,
+  OwnTicketReadGuard,
+  QueueReadGuard,
   RequesterGuard,
   StaffGuard,
+  TicketCreateGuard,
+  TicketReadGuard,
 } from "./authGuards";
 
 export interface AppRouterState {
@@ -64,6 +69,11 @@ appGuardRegistry.register(AnonymousGuard);
 appGuardRegistry.register(StaffGuard);
 appGuardRegistry.register(RequesterGuard);
 appGuardRegistry.register(AuditorGuard);
+appGuardRegistry.register(TicketReadGuard);
+appGuardRegistry.register(OwnTicketReadGuard);
+appGuardRegistry.register(TicketCreateGuard);
+appGuardRegistry.register(QueueReadGuard);
+appGuardRegistry.register(AuditReadGuard);
 
 export const APP_ROUTES = routerKit.createRoutes([
   { id: "system-status", path: "/", page: systemStatusPage },
@@ -72,49 +82,49 @@ export const APP_ROUTES = routerKit.createRoutes([
     id: "workspace",
     path: "/workspace",
     page: workspacePage,
-    guards: [AuthenticatedGuard, StaffGuard],
+    guards: [AuthenticatedGuard, StaffGuard, TicketReadGuard],
   },
   {
     id: "workspace-create-ticket",
     path: "/workspace/tickets/new",
     page: workspaceCreateTicketPage,
-    guards: [AuthenticatedGuard, StaffGuard],
+    guards: [AuthenticatedGuard, StaffGuard, TicketCreateGuard],
   },
   {
     id: "workspace-queues",
     path: "/workspace/queues",
     page: workspaceQueuesPage,
-    guards: [AuthenticatedGuard, StaffGuard],
+    guards: [AuthenticatedGuard, StaffGuard, QueueReadGuard],
   },
   {
     id: "workspace-ticket",
     path: "/workspace/tickets/:ticketId",
     page: workspaceTicketPage,
-    guards: [AuthenticatedGuard, StaffGuard],
+    guards: [AuthenticatedGuard, StaffGuard, TicketReadGuard],
   },
   {
     id: "requester-portal",
     path: "/portal",
     page: requesterPortalPage,
-    guards: [AuthenticatedGuard, RequesterGuard],
+    guards: [AuthenticatedGuard, RequesterGuard, OwnTicketReadGuard],
   },
   {
     id: "requester-create-ticket",
     path: "/portal/tickets/new",
     page: requesterCreateTicketPage,
-    guards: [AuthenticatedGuard, RequesterGuard],
+    guards: [AuthenticatedGuard, RequesterGuard, TicketCreateGuard],
   },
   {
     id: "requester-ticket",
     path: "/portal/tickets/:ticketId",
     page: requesterTicketPage,
-    guards: [AuthenticatedGuard, RequesterGuard],
+    guards: [AuthenticatedGuard, RequesterGuard, OwnTicketReadGuard],
   },
   {
     id: "audit-workspace",
     path: "/audit",
     page: auditWorkspacePage,
-    guards: [AuthenticatedGuard, AuditorGuard],
+    guards: [AuthenticatedGuard, AuditReadGuard],
   },
   {
     id: "account",

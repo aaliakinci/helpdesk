@@ -107,6 +107,7 @@ export function decodeTicketListQuery(query: Readonly<Record<string, unknown>>):
     "pageSize",
     "priority",
     "queueId",
+    "search",
     "sortBy",
     "sortDirection",
     "status",
@@ -114,6 +115,7 @@ export function decodeTicketListQuery(query: Readonly<Record<string, unknown>>):
   const status = optionalSingleString(query.status);
   const priority = optionalSingleString(query.priority);
   const queueId = optionalSingleString(query.queueId);
+  const search = optionalTrimmedString(query.search, "search", 120);
   const assignment = optionalSingleString(query.assignment) ?? "ALL";
   const sortBy = optionalSingleString(query.sortBy) ?? "updatedAt";
   const sortDirection = optionalSingleString(query.sortDirection) ?? "desc";
@@ -138,6 +140,7 @@ export function decodeTicketListQuery(query: Readonly<Record<string, unknown>>):
     pageSize: optionalPositiveInteger(query.pageSize, "pageSize", 20, 100),
     priority,
     queueId: queueId === null ? null : requireUuid(queueId),
+    search,
     sortBy: sortBy as TicketListInput["sortBy"],
     sortDirection,
     status,

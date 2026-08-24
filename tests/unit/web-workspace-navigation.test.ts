@@ -5,10 +5,13 @@ import { workspaceNavigationFor } from "../../src/web/src/features/auth/model/wo
 describe("workspace navigation", () => {
   it("exposes separate staff ticket, creation, queue, and account destinations", () => {
     expect(
-      workspaceNavigationFor("OWNER", ["tickets.read", "tickets.create", "queues.read"]).map(
-        (item) => item.path,
-      ),
-    ).toEqual(["/workspace", "/workspace/tickets/new", "/workspace/queues", "/account"]);
+      workspaceNavigationFor("OWNER", [
+        "tickets.read",
+        "tickets.create",
+        "queues.read",
+        "audit.read",
+      ]).map((item) => item.path),
+    ).toEqual(["/workspace", "/workspace/tickets/new", "/workspace/queues", "/audit", "/account"]);
   });
 
   it("keeps requester and auditor navigation inside their role boundaries", () => {

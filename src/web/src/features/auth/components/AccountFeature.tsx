@@ -67,6 +67,9 @@ export function AccountFeature({ id }: { readonly id: string }) {
             <Typography id={`${id}.identity.role`} component="p">
               {t("app:session.role")}: {session.activeTenant.role}
             </Typography>
+            <Typography id={`${id}.identity.time-zone`} component="p">
+              {t("app:shell.timeZone")}: {session.activeTenant.timeZone}
+            </Typography>
             <Stack
               id={`${id}.identity.permissions`}
               direction="row"
