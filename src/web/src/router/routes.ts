@@ -14,6 +14,7 @@ import {
   QueueReadGuard,
   RequesterGuard,
   StaffGuard,
+  SlaReadGuard,
   TicketCreateGuard,
   TicketReadGuard,
 } from "./authGuards";
@@ -44,6 +45,9 @@ const workspaceCreateTicketPage = lazyPage(async () => ({
 const workspaceQueuesPage = lazyPage(async () => ({
   default: (await import("@/pages/WorkspaceQueuesPage")).WorkspaceQueuesPage,
 }));
+const workspaceOperationsPage = lazyPage(async () => ({
+  default: (await import("@/pages/WorkspaceOperationsPage")).WorkspaceOperationsPage,
+}));
 const requesterPortalPage = lazyPage(async () => ({
   default: (await import("@/pages/RequesterPortalPage")).RequesterPortalPage,
 }));
@@ -73,6 +77,7 @@ appGuardRegistry.register(TicketReadGuard);
 appGuardRegistry.register(OwnTicketReadGuard);
 appGuardRegistry.register(TicketCreateGuard);
 appGuardRegistry.register(QueueReadGuard);
+appGuardRegistry.register(SlaReadGuard);
 appGuardRegistry.register(AuditReadGuard);
 
 export const APP_ROUTES = routerKit.createRoutes([
@@ -89,6 +94,12 @@ export const APP_ROUTES = routerKit.createRoutes([
     path: "/workspace/tickets/new",
     page: workspaceCreateTicketPage,
     guards: [AuthenticatedGuard, StaffGuard, TicketCreateGuard],
+  },
+  {
+    id: "workspace-operations",
+    path: "/workspace/operations",
+    page: workspaceOperationsPage,
+    guards: [AuthenticatedGuard, StaffGuard, SlaReadGuard],
   },
   {
     id: "workspace-queues",

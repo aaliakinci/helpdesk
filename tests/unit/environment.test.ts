@@ -25,6 +25,8 @@ describe("parseEnvironment", () => {
       outboxPollIntervalMs: 500,
       rabbitMqPrefetch: 8,
       realtimeAuthRecheckMs: 5_000,
+      slaSchedulerBatchSize: 50,
+      slaSchedulerIntervalMs: 30_000,
       workerHealthPort: 8081,
     });
     expect(result.databaseUrl).toBe(validEnvironment.DATABASE_URL);

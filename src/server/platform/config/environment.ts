@@ -24,6 +24,8 @@ export interface PlatformEnvironment {
   readonly refreshSessionTtlDays: number;
   readonly redisUrl: string;
   readonly realtimeAuthRecheckMs: number;
+  readonly slaSchedulerBatchSize: number;
+  readonly slaSchedulerIntervalMs: number;
   readonly webOrigin: string;
   readonly workerHealthPort: number;
 }
@@ -118,6 +120,20 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
       "REALTIME_AUTH_RECHECK_MS",
       1_000,
       60_000,
+    ),
+    slaSchedulerBatchSize: parseInteger(
+      environment.SLA_SCHEDULER_BATCH_SIZE,
+      50,
+      "SLA_SCHEDULER_BATCH_SIZE",
+      1,
+      500,
+    ),
+    slaSchedulerIntervalMs: parseInteger(
+      environment.SLA_SCHEDULER_INTERVAL_MS,
+      30_000,
+      "SLA_SCHEDULER_INTERVAL_MS",
+      1_000,
+      300_000,
     ),
     webOrigin: requireUrl(environment.WEB_ORIGIN ?? "http://127.0.0.1:5173", "WEB_ORIGIN", [
       "http:",

@@ -13,6 +13,7 @@ import { formatTicketDate, type TicketMode } from "../model/ticketPresentation";
 import { TicketActivity } from "./TicketActivity";
 import { TicketAssignmentPanel } from "./TicketAssignmentPanel";
 import { TicketReplyComposer } from "./TicketReplyComposer";
+import { TicketSlaCard } from "./TicketSlaCard";
 import { TicketWorkflow } from "./TicketWorkflow";
 
 export function TicketDetailPanel({
@@ -136,14 +137,14 @@ export function TicketDetailPanel({
             </Typography>
           </Stack>
         </Card>
-        <Card id={`${id}.sla`} cardTitle={t("app:tickets.sla.title")}>
-          <Alert id={`${id}.sla.placeholder`} severity="info">
-            {t("app:tickets.sla.notConfigured")}
-          </Alert>
-          <Typography id={`${id}.sla.time-zone`} component="p" variant="body2" sx={{ mt: 1 }}>
-            {t("app:tickets.context.timeZone")}: {ticket.timeZone}
-          </Typography>
-        </Card>
+        {mode === "staff" && (
+          <TicketSlaCard
+            id={`${id}.sla`}
+            locale={ticket.locale}
+            sla={detail.sla}
+            timeZone={ticket.timeZone}
+          />
+        )}
       </Box>
       {mode === "staff" && <TicketAssignmentPanel id={id} detail={detail} ticket={ticket} />}
       {mode === "staff" && <TicketWorkflow id={id} detail={detail} ticket={ticket} />}

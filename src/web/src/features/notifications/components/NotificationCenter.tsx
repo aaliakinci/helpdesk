@@ -82,7 +82,7 @@ export function NotificationCenter({
                 sx={{ fontWeight: notification.readAtUtc ? 400 : 700 }}
               >
                 {notification.ticketNumber
-                  ? `#${notification.ticketNumber} ${t("app:shell.assignedNotification")}`
+                  ? `#${notification.ticketNumber} ${notificationTitle(notification, t)}`
                   : notification.kind}
               </Typography>
               {notification.subject && (
@@ -130,4 +130,17 @@ export function NotificationCenter({
       ))}
     </Stack>
   );
+}
+
+function notificationTitle(
+  notification: NotificationsController["items"][number],
+  t: (key: string) => string,
+): string {
+  if (notification.kind === "TICKET_SLA_APPROACHING" && notification.milestone) {
+    return t(`app:shell.slaNotification.${notification.milestone}.APPROACHING`);
+  }
+  if (notification.kind === "TICKET_SLA_BREACHED" && notification.milestone) {
+    return t(`app:shell.slaNotification.${notification.milestone}.BREACHED`);
+  }
+  return t("app:shell.assignedNotification");
 }

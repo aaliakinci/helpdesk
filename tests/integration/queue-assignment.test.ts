@@ -6,6 +6,7 @@ import { OperationsQueryService } from "../../src/server/modules/support/applica
 import { QueueCommandService } from "../../src/server/modules/support/application/queue-command.service.js";
 import { QueueQueryService } from "../../src/server/modules/support/application/queue-query.service.js";
 import { SupportEventWriter } from "../../src/server/modules/support/application/support-event-writer.service.js";
+import { SlaLifecycleService } from "../../src/server/modules/sla/application/sla-lifecycle.service.js";
 import { TicketCommandService } from "../../src/server/modules/support/application/ticket-command.service.js";
 import { TicketQueryService } from "../../src/server/modules/support/application/ticket-query.service.js";
 import { IdentityService } from "../../src/server/modules/identity/application/identity.service.js";
@@ -36,7 +37,12 @@ describe("queue and assignment operations", () => {
     config,
   );
   const ticketQueries = new TicketQueryService(prisma);
-  const ticketCommands = new TicketCommandService(prisma, events, ticketQueries);
+  const ticketCommands = new TicketCommandService(
+    prisma,
+    events,
+    ticketQueries,
+    new SlaLifecycleService(),
+  );
   const queueQueries = new QueueQueryService(prisma);
   const queueCommands = new QueueCommandService(prisma, events, queueQueries);
   const assignments = new AssignmentCommandService(prisma, events, ticketQueries);
@@ -230,6 +236,7 @@ describe("queue and assignment operations", () => {
     expect(requesterDetail).not.toHaveProperty("queue");
     expect(requesterDetail).not.toHaveProperty("assignmentHistory");
     expect(requesterDetail).not.toHaveProperty("statusHistory");
+    expect(requesterDetail).not.toHaveProperty("sla");
 
     const requesterPage = await ticketQueries.listTickets(requester, {
       assignment: "UNASSIGNED",
@@ -333,7 +340,7 @@ describe("queue and assignment operations", () => {
   it("returns tenant-scoped dashboard and agent workload projections", async () => {
     const dashboard = await operations.dashboard(owner);
     expect(dashboard.queues.some((item) => item.id === queue.id)).toBe(true);
-    expect(dashboard.sla.status).toBe("NOT_CONFIGURED");
+    expect(["ACTIVE", "NOT_CONFIGURED"]).toContain(dashboard.sla.status);
     const managerWorkload = await operations.agentWorkload(owner, queue.id);
     expect(managerWorkload.map((item) => item.membershipId).sort()).toEqual(
       [agent.membershipId, secondAgent.membershipId].sort(),

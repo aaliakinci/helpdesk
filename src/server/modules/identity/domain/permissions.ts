@@ -15,6 +15,8 @@ export const PERMISSIONS = [
   "tickets.manage",
   "queues.read",
   "queues.manage",
+  "sla.read",
+  "sla.manage",
   "audit.read",
 ] as const;
 
@@ -33,6 +35,8 @@ const ROLE_PERMISSIONS: Readonly<Record<TenantRole, readonly Permission[]>> = {
     "tickets.manage",
     "queues.read",
     "queues.manage",
+    "sla.read",
+    "sla.manage",
     "audit.read",
   ],
   AGENT: [
@@ -42,6 +46,7 @@ const ROLE_PERMISSIONS: Readonly<Record<TenantRole, readonly Permission[]>> = {
     "tickets.create",
     "tickets.manage",
     "queues.read",
+    "sla.read",
   ],
   REQUESTER: ["tenant.read", "tickets.read-own", "tickets.create"],
   AUDITOR: [
@@ -50,6 +55,7 @@ const ROLE_PERMISSIONS: Readonly<Record<TenantRole, readonly Permission[]>> = {
     "customers.read",
     "tickets.read",
     "queues.read",
+    "sla.read",
     "audit.read",
   ],
 };

@@ -140,7 +140,9 @@ assert.equal(
   dashboard.queues.some((item) => item.id === queue.id),
   true,
 );
-assert.equal(dashboard.sla.status, "NOT_CONFIGURED");
+assert.equal(dashboard.sla.status, "ACTIVE");
+assert.equal(typeof dashboard.sla.approachingTickets, "number");
+assert.equal(typeof dashboard.sla.breachedTickets, "number");
 
 const workloadResponse = await request(`/api/v1/operations/agent-workload?queueId=${queue.id}`, {
   authorization: `Bearer ${owner.accessToken}`,

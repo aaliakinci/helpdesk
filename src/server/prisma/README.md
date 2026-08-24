@@ -23,4 +23,8 @@ Composite tenant foreign keys prevent queue, membership, ticket, and assignment 
 linked across tenants. Dedicated queue/assignee/status indexes support operational list and workload
 queries without Redis correctness dependencies.
 
+The SLA migration adds one versioned policy per tenant, fixed priority targets, immutable ticket
+snapshots, due-state indexes, and SYSTEM actors for scheduled history/audit writes. Database checks
+bound all durations and preserve actor semantics; ticket/policy relations remain tenant-composite.
+
 Migrations must preserve tenant isolation, same-tenant relationships, durable outbox data, and safe forward deployment.

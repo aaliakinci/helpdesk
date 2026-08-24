@@ -7,9 +7,7 @@ import { useAppTranslation } from "@/i18n";
 
 import { useQueueCreateForm } from "../hooks/useQueueCreateForm";
 import { useQueueOperations } from "../hooks/useQueueOperations";
-import { AgentWorkloadCard } from "./AgentWorkloadCard";
 import { QueueCreateCard } from "./QueueCreateCard";
-import { QueueDashboard } from "./QueueDashboard";
 import { QueueList } from "./QueueList";
 
 export function QueueOperationsFeature({ id }: { readonly id: string }) {
@@ -32,24 +30,22 @@ export function QueueOperationsFeature({ id }: { readonly id: string }) {
           {operations.error}
         </Alert>
       )}
-      {operations.dashboard && (
-        <QueueDashboard id={`${id}.dashboard`} dashboard={operations.dashboard} />
-      )}
       <Box
         id={`${id}.management`}
         sx={{
           alignItems: "start",
           display: "grid",
           gap: 3,
-          gridTemplateColumns: { xs: "1fr", lg: "360px minmax(0, 1fr)" },
+          gridTemplateColumns: operations.canManage
+            ? { xs: "1fr", lg: "360px minmax(0, 1fr)" }
+            : "1fr",
         }}
       >
-        <Stack id={`${id}.sidebar`} spacing={3}>
-          {operations.canManage && (
+        {operations.canManage && (
+          <Stack id={`${id}.sidebar`} spacing={3}>
             <QueueCreateCard id={`${id}.create`} busy={operations.busy} form={createForm} />
-          )}
-          <AgentWorkloadCard id={`${id}.workload`} workload={operations.workload} />
-        </Stack>
+          </Stack>
+        )}
         <QueueList id={`${id}.queues`} operations={operations} />
       </Box>
     </Stack>

@@ -10,6 +10,7 @@ export type TicketStatus = "NEW" | "OPEN" | "PENDING" | "RESOLVED" | "CLOSED";
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 export type TicketCommentVisibility = "PUBLIC" | "INTERNAL";
 export type TicketAssignmentStatus = "ASSIGNED" | "UNASSIGNED";
+export type SlaMilestoneStatus = "ACTIVE" | "APPROACHING" | "BREACHED" | "COMPLETED";
 
 export interface TicketRequester {
   readonly contactId: string;
@@ -52,8 +53,20 @@ export interface TicketDetail extends TicketSummary {
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
+  readonly sla?: {
+    readonly autoCloseAtUtc: string | null;
+    readonly firstResponse: TicketSlaMilestone;
+    readonly policyVersion: number;
+    readonly prioritySnapshot: TicketPriority;
+    readonly resolution: TicketSlaMilestone;
+    readonly wallClock: true;
+  } | null;
   readonly statusHistory?: readonly {
-    readonly actor: { readonly displayName: string; readonly id: string };
+    readonly actor: {
+      readonly displayName: string | null;
+      readonly id: string | null;
+      readonly type: "SYSTEM" | "USER";
+    };
     readonly fromStatus: TicketStatus | null;
     readonly id: string;
     readonly occurredAtUtc: string;
@@ -61,6 +74,14 @@ export interface TicketDetail extends TicketSummary {
     readonly version: number;
   }[];
   readonly tags: readonly { readonly id: string; readonly name: string }[];
+}
+
+export interface TicketSlaMilestone {
+  readonly approachingSentAtUtc: string | null;
+  readonly breachedAtUtc: string | null;
+  readonly completedAtUtc: string | null;
+  readonly dueAtUtc: string;
+  readonly status: SlaMilestoneStatus;
 }
 
 export interface QueueReference {
@@ -168,12 +189,15 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
     reopenedFrom: value.reopenedFrom === null ? null : decodeTicketLink(value.reopenedFrom),
     reopenedTickets: requireArray(value.reopenedTickets, "reopenedTickets").map(decodeTicketLink),
     resolvedAtUtc: nullableString(value.resolvedAtUtc, "resolvedAtUtc"),
+    ...(Object.hasOwn(value, "sla")
+      ? { sla: value.sla === null ? null : decodeTicketSla(value.sla) }
+      : {}),
     ...(Object.hasOwn(value, "statusHistory")
       ? {
           statusHistory: requireArray(value.statusHistory, "statusHistory").map((item) => {
             const history = requireRecord(item, "status history");
             return {
-              actor: decodePerson(history.actor),
+              actor: decodeStatusActor(history.actor),
               fromStatus: history.fromStatus === null ? null : decodeStatus(history.fromStatus),
               id: requireString(history.id, "history.id"),
               occurredAtUtc: requireString(history.occurredAtUtc, "history.occurredAtUtc"),
@@ -187,6 +211,62 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
       const tag = requireRecord(item, "tag");
       return { id: requireString(tag.id, "tag.id"), name: requireString(tag.name, "tag.name") };
     }),
+  };
+}
+
+function decodeTicketSla(body: unknown): NonNullable<Required<Pick<TicketDetail, "sla">>["sla"]> {
+  const value = requireRecord(body, "ticket SLA");
+  if (value.wallClock !== true) throw new TypeError("ticket SLA wallClock is invalid.");
+  return {
+    autoCloseAtUtc: nullableString(value.autoCloseAtUtc, "sla.autoCloseAtUtc"),
+    firstResponse: decodeSlaMilestone(value.firstResponse, "firstResponse"),
+    policyVersion: requireNumber(value.policyVersion, "sla.policyVersion"),
+    prioritySnapshot: decodePriority(value.prioritySnapshot),
+    resolution: decodeSlaMilestone(value.resolution, "resolution"),
+    wallClock: true,
+  };
+}
+
+function decodeSlaMilestone(body: unknown, name: string): TicketSlaMilestone {
+  const value = requireRecord(body, `SLA ${name}`);
+  return {
+    approachingSentAtUtc: nullableString(
+      value.approachingSentAtUtc,
+      `sla.${name}.approachingSentAtUtc`,
+    ),
+    breachedAtUtc: nullableString(value.breachedAtUtc, `sla.${name}.breachedAtUtc`),
+    completedAtUtc: nullableString(value.completedAtUtc, `sla.${name}.completedAtUtc`),
+    dueAtUtc: requireString(value.dueAtUtc, `sla.${name}.dueAtUtc`),
+    status: decodeSlaMilestoneStatus(value.status),
+  };
+}
+
+function decodeSlaMilestoneStatus(value: unknown): SlaMilestoneStatus {
+  const statuses: readonly SlaMilestoneStatus[] = [
+    "ACTIVE",
+    "APPROACHING",
+    "BREACHED",
+    "COMPLETED",
+  ];
+  if (typeof value !== "string" || !statuses.includes(value as SlaMilestoneStatus)) {
+    throw new TypeError("SLA milestone status is invalid.");
+  }
+  return value as SlaMilestoneStatus;
+}
+
+function decodeStatusActor(body: unknown): {
+  readonly displayName: string | null;
+  readonly id: string | null;
+  readonly type: "SYSTEM" | "USER";
+} {
+  const value = requireRecord(body, "status actor");
+  if (value.type !== "SYSTEM" && value.type !== "USER") {
+    throw new TypeError("status actor type is invalid.");
+  }
+  return {
+    displayName: nullableString(value.displayName, "status actor displayName"),
+    id: nullableString(value.id, "status actor id"),
+    type: value.type,
   };
 }
 

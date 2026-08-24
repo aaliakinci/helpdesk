@@ -18,7 +18,40 @@ export class OperationsQueryService {
       throw new ForbiddenException("The operation is not permitted.");
     }
     const scope = ticketReadScope(identity);
-    const [openTickets, unassignedTickets, myOpenTickets, queues] = await this.prisma.$transaction([
+    const clock = await this.prisma.$queryRaw<readonly { now: Date }[]>`
+      SELECT CURRENT_TIMESTAMP AS "now"
+    `;
+    const now = clock[0]?.now;
+    if (!now) throw new Error("Database clock could not be read.");
+    const activeTicketScope: Prisma.TicketWhereInput = {
+      AND: [scope, { status: { not: "CLOSED" } }],
+    };
+    const breachedConditions: readonly Prisma.TicketSlaStateWhereInput[] = [
+      { firstResponseCompletedAt: null, firstResponseDueAt: { lte: now } },
+      { resolutionCompletedAt: null, resolutionDueAt: { lte: now } },
+    ];
+    const approachingConditions: readonly Prisma.TicketSlaStateWhereInput[] = [
+      {
+        firstResponseApproachingAt: { lte: now },
+        firstResponseCompletedAt: null,
+        firstResponseDueAt: { gt: now },
+      },
+      {
+        resolutionApproachingAt: { lte: now },
+        resolutionCompletedAt: null,
+        resolutionDueAt: { gt: now },
+      },
+    ];
+    const [
+      openTickets,
+      unassignedTickets,
+      myOpenTickets,
+      queues,
+      policy,
+      breachedTickets,
+      approachingTickets,
+      warningStates,
+    ] = await this.prisma.$transaction([
       this.prisma.ticket.count({ where: { AND: [scope, { status: { in: [...OPEN_STATUSES] } }] } }),
       this.prisma.ticket.count({
         where: {
@@ -49,6 +82,40 @@ export class OperationsQueryService {
         },
         orderBy: [{ name: "asc" }, { id: "asc" }],
         select: { id: true, name: true },
+      }),
+      this.prisma.slaPolicy.findUnique({
+        select: { id: true },
+        where: { tenantId: identity.tenantId },
+      }),
+      this.prisma.ticketSlaState.count({
+        where: { OR: [...breachedConditions], ticket: { is: activeTicketScope } },
+      }),
+      this.prisma.ticketSlaState.count({
+        where: {
+          AND: [{ OR: [...approachingConditions] }, { NOT: { OR: [...breachedConditions] } }],
+          ticket: { is: activeTicketScope },
+        },
+      }),
+      this.prisma.ticketSlaState.findMany({
+        include: {
+          ticket: {
+            select: {
+              currentAssignee: {
+                select: { id: true, user: { select: { displayName: true } } },
+              },
+              currentQueue: { select: { id: true, name: true } },
+              id: true,
+              number: true,
+              priority: true,
+              subject: true,
+            },
+          },
+        },
+        take: 100,
+        where: {
+          OR: [...breachedConditions, ...approachingConditions],
+          ticket: { is: activeTicketScope },
+        },
       }),
     ]);
     const queueIds = queues.map((queue) => queue.id);
@@ -84,6 +151,46 @@ export class OperationsQueryService {
     const unassignedCounts = new Map(
       unassignedByQueue.map((item) => [item.currentQueueId, readAggregateCount(item._count)]),
     );
+    const warnings = warningStates
+      .map((state) => {
+        const firstResponseStatus = milestoneStatus(
+          now,
+          state.firstResponseApproachingAt,
+          state.firstResponseDueAt,
+          state.firstResponseCompletedAt,
+        );
+        const resolutionStatus = milestoneStatus(
+          now,
+          state.resolutionApproachingAt,
+          state.resolutionDueAt,
+          state.resolutionCompletedAt,
+        );
+        return {
+          assignee: state.ticket.currentAssignee
+            ? {
+                displayName: state.ticket.currentAssignee.user.displayName,
+                membershipId: state.ticket.currentAssignee.id,
+              }
+            : null,
+          firstResponseStatus,
+          id: state.ticket.id,
+          nextDueAtUtc: earliestOutstandingDue(state).toISOString(),
+          number: state.ticket.number,
+          priority: state.ticket.priority,
+          queue: state.ticket.currentQueue,
+          resolutionStatus,
+          subject: state.ticket.subject,
+        };
+      })
+      .filter(
+        (warning) =>
+          warning.firstResponseStatus === "APPROACHING" ||
+          warning.firstResponseStatus === "BREACHED" ||
+          warning.resolutionStatus === "APPROACHING" ||
+          warning.resolutionStatus === "BREACHED",
+      )
+      .sort((left, right) => left.nextDueAtUtc.localeCompare(right.nextDueAtUtc))
+      .slice(0, 20);
     return {
       myOpenTickets,
       openTickets,
@@ -93,7 +200,14 @@ export class OperationsQueryService {
         openTickets: openCounts.get(queue.id) ?? 0,
         unassignedTickets: unassignedCounts.get(queue.id) ?? 0,
       })),
-      sla: { breachedTickets: null, dueSoonTickets: null, status: "NOT_CONFIGURED" },
+      sla: policy
+        ? { approachingTickets, breachedTickets, status: "ACTIVE", warnings }
+        : {
+            approachingTickets: null,
+            breachedTickets: null,
+            status: "NOT_CONFIGURED",
+            warnings: [],
+          },
       unassignedTickets,
     };
   }
@@ -156,6 +270,31 @@ export class OperationsQueryService {
       queueIds: [...member.queueIds].sort(),
     }));
   }
+}
+
+function milestoneStatus(
+  now: Date,
+  approachingAt: Date,
+  dueAt: Date,
+  completedAt: Date | null,
+): "ACTIVE" | "APPROACHING" | "BREACHED" | "COMPLETED" {
+  if (completedAt) return "COMPLETED";
+  if (dueAt <= now) return "BREACHED";
+  if (approachingAt <= now) return "APPROACHING";
+  return "ACTIVE";
+}
+
+function earliestOutstandingDue(state: {
+  readonly firstResponseCompletedAt: Date | null;
+  readonly firstResponseDueAt: Date;
+  readonly resolutionCompletedAt: Date | null;
+  readonly resolutionDueAt: Date;
+}): Date {
+  const due = [
+    ...(state.firstResponseCompletedAt ? [] : [state.firstResponseDueAt]),
+    ...(state.resolutionCompletedAt ? [] : [state.resolutionDueAt]),
+  ].sort((left, right) => left.getTime() - right.getTime());
+  return due[0] ?? state.resolutionDueAt;
 }
 
 function readAggregateCount(value: unknown): number {

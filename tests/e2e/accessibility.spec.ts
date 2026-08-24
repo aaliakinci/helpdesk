@@ -8,7 +8,7 @@ test.skip(!password, "DEMO_SEED_PASSWORD is required for authenticated accessibi
 test("staff routes have no serious accessibility violations or horizontal overflow", async ({
   page,
 }) => {
-  await login(page, "agent@demo.helpdesk.test");
+  await login(page, "manager@demo.helpdesk.test");
   await assertRoute(page, "/workspace");
   const skipLink = page.locator('[id$=".skip-link"]');
   await skipLink.focus();
@@ -17,6 +17,8 @@ test("staff routes have no serious accessibility violations or horizontal overfl
   await page.locator('[id$=".notifications.toggle"]').click();
   await expect(page.locator('[id$=".notifications.panel"]')).toBeVisible();
   await assertRoute(page, "/workspace/tickets/new");
+  await assertRoute(page, "/workspace/operations");
+  await expect(page.locator('[id$=".policy.save"]')).toBeEnabled();
   await assertRoute(page, "/workspace/queues");
   await assertRoute(page, "/account");
 });

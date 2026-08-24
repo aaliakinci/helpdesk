@@ -9,9 +9,17 @@ describe("workspace navigation", () => {
         "tickets.read",
         "tickets.create",
         "queues.read",
+        "sla.read",
         "audit.read",
       ]).map((item) => item.path),
-    ).toEqual(["/workspace", "/workspace/tickets/new", "/workspace/queues", "/audit", "/account"]);
+    ).toEqual([
+      "/workspace/operations",
+      "/workspace",
+      "/workspace/tickets/new",
+      "/workspace/queues",
+      "/audit",
+      "/account",
+    ]);
   });
 
   it("keeps requester and auditor navigation inside their role boundaries", () => {

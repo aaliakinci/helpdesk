@@ -63,9 +63,13 @@ describe("identity security primitives", () => {
 
   it("keeps fixed roles deterministic and Auditor read-only", () => {
     expect(permissionsForRole("OWNER")).toContain("memberships.manage-role");
+    expect(permissionsForRole("OWNER")).toContain("sla.manage");
     expect(permissionsForRole("MANAGER")).not.toContain("memberships.manage-role");
+    expect(permissionsForRole("MANAGER")).toContain("sla.manage");
     expect(permissionsForRole("AGENT")).toContain("tickets.manage");
+    expect(permissionsForRole("AGENT")).toContain("sla.read");
     expect(permissionsForRole("REQUESTER")).toContain("tickets.read-own");
+    expect(permissionsForRole("REQUESTER")).not.toContain("sla.read");
     expect(permissionsForRole("AUDITOR")).toContain("audit.read");
     expect(permissionsForRole("AUDITOR")).not.toContain("tickets.manage");
   });

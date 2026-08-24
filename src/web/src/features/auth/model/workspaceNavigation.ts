@@ -6,6 +6,7 @@ export type WorkspacePath =
   | "/portal"
   | "/portal/tickets/new"
   | "/workspace"
+  | "/workspace/operations"
   | "/workspace/queues"
   | "/workspace/tickets/new";
 
@@ -40,6 +41,9 @@ export function workspaceNavigationFor(
   }
 
   return [
+    allowed.has("sla.read")
+      ? { labelKey: "app:navigation.operations", path: "/workspace/operations" as const }
+      : null,
     allowed.has("tickets.read")
       ? { labelKey: "app:navigation.tickets", path: "/workspace" as const }
       : null,

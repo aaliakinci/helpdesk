@@ -112,7 +112,7 @@ export function TicketActivity({
                 key={entry.id}
                 id={`${id}.status-history.${entry.id}`}
                 cardTitle={`${entry.fromStatus ? t(`app:tickets.status.${entry.fromStatus}`) : "—"} → ${t(`app:tickets.status.${entry.toStatus}`)}`}
-                subheader={`${entry.actor.displayName} · ${formatDate(entry.occurredAtUtc)}`}
+                subheader={`${entry.actor.type === "SYSTEM" ? t("app:tickets.systemActor") : entry.actor.displayName} · ${formatDate(entry.occurredAtUtc)}`}
               >
                 <Typography
                   id={`${id}.status-history.${entry.id}.version`}

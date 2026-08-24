@@ -19,14 +19,13 @@ A multi-tenant customer support platform for small and medium-sized support team
 - Atomic per-tenant ticket numbering and linked reopen behavior for closed tickets
 - Tenant-scoped queues, active Agent memberships, manual/take-over/round-robin assignment, and immutable assignment history
 - SQL-backed unassigned/my-ticket/queue workload and operational dashboard projections
+- Versioned wall-clock SLA policies, immutable ticket snapshots, idempotent warnings, and automatic close scheduling
+- Authorized Socket.IO invalidations, Redis scale-out, and membership-scoped in-app notifications
 - React, Vite, and Lily UI login/session/ticket/queue application with Turkish and English locales
 - Docker Compose development topology and GitHub Actions quality gates
 
 ## Further v1 product scope
 
-- Outbox publishing and idempotent RabbitMQ consumers
-- In-app notifications and authorized realtime updates
-- Priority-based first-response and resolution SLA tracking
 - Audit history, attachments, PostgreSQL search, and server-side pagination
 - Docker-based local development and an HTTPS portfolio deployment
 
@@ -36,8 +35,8 @@ The v1 scope deliberately excludes email inbox synchronization, custom role buil
 
 The repository is organized around three deployable applications:
 
-- `support-api`: NestJS modular-monolith HTTP API; authorized WebSocket support is planned
-- `support-worker`: NestJS background process; durable consumers and scheduled jobs are planned
+- `support-api`: NestJS modular-monolith HTTP API with authorized Socket.IO invalidations
+- `support-worker`: NestJS background process for outbox publication, durable consumers, and bounded scheduled jobs
 - `support-web`: React and TypeScript web application using `@lily_platform/lily_ui`
 
 PostgreSQL is the source of truth. RabbitMQ delivery is at-least-once and consumers must be idempotent. Redis may support WebSocket scale-out and replaceable state, but business correctness must not depend on it.
@@ -112,6 +111,10 @@ in [the authentication guide](docs/authentication.md); their local-only password
 including internal-note projection, lifecycle, stale revision handling, and linked reopen.
 `npm run smoke:operations` verifies queue management, assignment history, take-over, round-robin,
 dashboard/workload queries, role boundaries, and tenant isolation.
+
+SLA targets use elapsed wall-clock time: Pending does not pause either clock, and tenant time zones
+affect display only. Policy changes apply to newly created tickets because each ticket stores its
+own policy snapshot. See [SLA operations](docs/sla-operations.md).
 
 See [the development guide](docs/development.md) for the complete command matrix.
 

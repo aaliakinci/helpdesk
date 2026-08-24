@@ -32,15 +32,29 @@ describe("web operations runtime contracts", () => {
     ).toMatchObject({ activeMemberCount: 1, name: "General", openTicketCount: 4, version: 3 });
   });
 
-  it("rejects an invented SLA projection", () => {
+  it("decodes active SLA metrics and rejects malformed warning projections", () => {
+    expect(
+      decodeDashboard({
+        myOpenTickets: 1,
+        openTickets: 5,
+        queues: [],
+        sla: {
+          approachingTickets: 1,
+          breachedTickets: 2,
+          status: "ACTIVE",
+          warnings: [],
+        },
+        unassignedTickets: 3,
+      }),
+    ).toMatchObject({ sla: { approachingTickets: 1, breachedTickets: 2, status: "ACTIVE" } });
     expect(() =>
       decodeDashboard({
         myOpenTickets: 1,
         openTickets: 5,
         queues: [],
-        sla: { breachedTickets: 2, dueSoonTickets: null, status: "ACTIVE" },
+        sla: { approachingTickets: null, breachedTickets: 2, status: "ACTIVE", warnings: [] },
         unassignedTickets: 3,
       }),
-    ).toThrow("dashboard.sla");
+    ).toThrow("dashboard.sla.approachingTickets");
   });
 });

@@ -46,12 +46,27 @@ export interface OperationsDashboard {
     readonly unassignedTickets: number;
   }[];
   readonly sla: {
-    readonly breachedTickets: null;
-    readonly dueSoonTickets: null;
-    readonly status: "NOT_CONFIGURED";
+    readonly approachingTickets: number | null;
+    readonly breachedTickets: number | null;
+    readonly status: "ACTIVE" | "NOT_CONFIGURED";
+    readonly warnings: readonly SlaWarning[];
   };
   readonly unassignedTickets: number;
 }
+
+export interface SlaWarning {
+  readonly assignee: { readonly displayName: string; readonly membershipId: string } | null;
+  readonly firstResponseStatus: SlaMilestoneStatus;
+  readonly id: string;
+  readonly nextDueAtUtc: string;
+  readonly number: number;
+  readonly priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  readonly queue: { readonly id: string; readonly name: string } | null;
+  readonly resolutionStatus: SlaMilestoneStatus;
+  readonly subject: string;
+}
+
+export type SlaMilestoneStatus = "ACTIVE" | "APPROACHING" | "BREACHED" | "COMPLETED";
 
 export interface AgentWorkload {
   readonly assignedOpenTickets: number;
@@ -108,13 +123,10 @@ export function decodeEligibleQueueMembers(body: unknown): readonly EligibleQueu
 export function decodeDashboard(body: unknown): OperationsDashboard {
   const value = requireRecord(body, "operations dashboard");
   const sla = requireRecord(value.sla, "dashboard.sla");
-  if (
-    sla.status !== "NOT_CONFIGURED" ||
-    sla.breachedTickets !== null ||
-    sla.dueSoonTickets !== null
-  ) {
-    throw new TypeError("dashboard.sla is invalid.");
+  if (sla.status !== "NOT_CONFIGURED" && sla.status !== "ACTIVE") {
+    throw new TypeError("dashboard.sla status is invalid.");
   }
+  const active = sla.status === "ACTIVE";
   return {
     myOpenTickets: requireNumber(value.myOpenTickets, "dashboard.myOpenTickets"),
     openTickets: requireNumber(value.openTickets, "dashboard.openTickets"),
@@ -127,9 +139,77 @@ export function decodeDashboard(body: unknown): OperationsDashboard {
         unassignedTickets: requireNumber(queue.unassignedTickets, "queue.unassignedTickets"),
       };
     }),
-    sla: { breachedTickets: null, dueSoonTickets: null, status: "NOT_CONFIGURED" },
+    sla: {
+      approachingTickets: active
+        ? requireNumber(sla.approachingTickets, "dashboard.sla.approachingTickets")
+        : requireNull(sla.approachingTickets, "dashboard.sla.approachingTickets"),
+      breachedTickets: active
+        ? requireNumber(sla.breachedTickets, "dashboard.sla.breachedTickets")
+        : requireNull(sla.breachedTickets, "dashboard.sla.breachedTickets"),
+      status: sla.status,
+      warnings: requireArray(sla.warnings, "dashboard.sla.warnings").map(decodeSlaWarning),
+    },
     unassignedTickets: requireNumber(value.unassignedTickets, "dashboard.unassignedTickets"),
   };
+}
+
+function decodeSlaWarning(body: unknown): SlaWarning {
+  const value = requireRecord(body, "SLA warning");
+  return {
+    assignee: decodeNullableAssignment(value.assignee),
+    firstResponseStatus: decodeSlaMilestoneStatus(value.firstResponseStatus),
+    id: requireString(value.id, "warning.id"),
+    nextDueAtUtc: requireString(value.nextDueAtUtc, "warning.nextDueAtUtc"),
+    number: requireNumber(value.number, "warning.number"),
+    priority: decodePriority(value.priority),
+    queue: decodeNullableQueue(value.queue),
+    resolutionStatus: decodeSlaMilestoneStatus(value.resolutionStatus),
+    subject: requireString(value.subject, "warning.subject"),
+  };
+}
+
+function decodeSlaMilestoneStatus(value: unknown): SlaMilestoneStatus {
+  const statuses: readonly SlaMilestoneStatus[] = [
+    "ACTIVE",
+    "APPROACHING",
+    "BREACHED",
+    "COMPLETED",
+  ];
+  if (typeof value !== "string" || !statuses.includes(value as SlaMilestoneStatus)) {
+    throw new TypeError("warning milestone status is invalid.");
+  }
+  return value as SlaMilestoneStatus;
+}
+
+function decodePriority(value: unknown): SlaWarning["priority"] {
+  const priorities: readonly SlaWarning["priority"][] = ["LOW", "NORMAL", "HIGH", "URGENT"];
+  if (typeof value !== "string" || !priorities.includes(value as SlaWarning["priority"])) {
+    throw new TypeError("warning priority is invalid.");
+  }
+  return value as SlaWarning["priority"];
+}
+
+function decodeNullableAssignment(value: unknown): SlaWarning["assignee"] {
+  if (value === null) return null;
+  const assignment = requireRecord(value, "warning assignee");
+  return {
+    displayName: requireString(assignment.displayName, "warning.assignee.displayName"),
+    membershipId: requireString(assignment.membershipId, "warning.assignee.membershipId"),
+  };
+}
+
+function decodeNullableQueue(value: unknown): SlaWarning["queue"] {
+  if (value === null) return null;
+  const queue = requireRecord(value, "warning queue");
+  return {
+    id: requireString(queue.id, "warning.queue.id"),
+    name: requireString(queue.name, "warning.queue.name"),
+  };
+}
+
+function requireNull(value: unknown, name: string): null {
+  if (value !== null) throw new TypeError(`${name} must be null.`);
+  return null;
 }
 
 export function decodeAgentWorkload(body: unknown): readonly AgentWorkload[] {

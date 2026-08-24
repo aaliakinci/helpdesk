@@ -83,7 +83,7 @@ returns `409` and does not partially update the aggregate or history.
   `ticket.created.v1` outbox message in one transaction.
 - `GET /api/v1/tickets/:ticketId` applies role-specific projection. Requesters can read only tickets
   attached to their server-derived customer contact and never receive internal comments, queue or
-  assignee identities, assignment history, or staff status history. Their list and detail
+  assignee identities, assignment history, staff status history, or SLA operational data. Their list and detail
   projections expose only `assignmentStatus` as `ASSIGNED` or `UNASSIGNED`.
 - `POST /api/v1/tickets/:ticketId/comments` creates a public reply or staff-only internal note and
   requires `expectedVersion`.
@@ -113,8 +113,8 @@ operation.
   own active membership.
 - `POST /api/v1/tickets/:ticketId/round-robin` locks the queue cursor and deterministically selects
   the next active Agent member.
-- `GET /api/v1/operations/dashboard` returns SQL-backed open, unassigned, own-ticket, queue, and SLA
-  placeholder totals. `GET /api/v1/operations/agent-workload` returns active-member workloads and
+- `GET /api/v1/operations/dashboard` returns SQL-backed open, unassigned, own-ticket, queue, SLA
+  approaching/breached totals, and at most 20 authorized warning rows. `GET /api/v1/operations/agent-workload` returns active-member workloads and
   accepts an optional `queueId`.
 
 Every assignment write requires `expectedVersion` and advances the ticket revision. The current
@@ -123,6 +123,18 @@ queue/assignee projection, immutable assignment history, business audit entry, a
 serializes round-robin cursor changes. Composite foreign keys prevent cross-tenant queue,
 membership, and ticket relationships; application policy additionally requires an active Agent
 membership in the selected queue.
+
+## SLA policy and ticket state
+
+- `GET /api/v1/sla/policy` returns the active tenant's versioned wall-clock policy to roles with
+  `sla.read`.
+- `PUT /api/v1/sla/policy` creates or replaces all four priority targets and requires
+  `expectedVersion`; only Owner and Manager have `sla.manage`.
+- Staff ticket detail includes the immutable policy version, UTC first-response/resolution due
+  instants, milestone states, completion evidence, and a resolved ticket's scheduled auto-close.
+
+Every policy write requires exactly one `LOW`, `NORMAL`, `HIGH`, and `URGENT` target. Existing
+ticket due instants never change when the policy is edited. Pending status does not pause a target.
 
 ## Notifications
 
@@ -135,3 +147,7 @@ membership in the selected queue.
 Notification payloads are projected through an allowlist. Raw JSON stored by background consumers
 is not returned directly, and a notification owned by another tenant or membership produces the
 same non-disclosing `404` as an unknown identifier.
+
+Known in-app kinds include automatic Agent assignment plus approaching and breached first-response
+or resolution SLA warnings. SLA warnings are addressed to active Owner/Manager memberships and the
+active assigned Agent, with recipient duplication removed.

@@ -5,6 +5,7 @@ import { CustomerService } from "../../src/server/modules/support/application/cu
 import { TicketCommandService } from "../../src/server/modules/support/application/ticket-command.service.js";
 import { TicketQueryService } from "../../src/server/modules/support/application/ticket-query.service.js";
 import { SupportEventWriter } from "../../src/server/modules/support/application/support-event-writer.service.js";
+import { SlaLifecycleService } from "../../src/server/modules/sla/application/sla-lifecycle.service.js";
 import { IdentityService } from "../../src/server/modules/identity/application/identity.service.js";
 import {
   DEMO_EMAILS,
@@ -36,6 +37,7 @@ describe("customer and ticket transaction core", () => {
     prisma,
     new SupportEventWriter(requestContext),
     ticketQueries,
+    new SlaLifecycleService(),
   );
   const customers = new CustomerService(prisma);
   const password = process.env.DEMO_SEED_PASSWORD ?? "";

@@ -12,6 +12,7 @@ import { assertMessagingTopology } from "../../src/server/modules/messaging/infr
 import { TicketCommandService } from "../../src/server/modules/support/application/ticket-command.service.js";
 import { TicketQueryService } from "../../src/server/modules/support/application/ticket-query.service.js";
 import { SupportEventWriter } from "../../src/server/modules/support/application/support-event-writer.service.js";
+import { SlaLifecycleService } from "../../src/server/modules/sla/application/sla-lifecycle.service.js";
 import {
   DEMO_MEMBERSHIPS,
   DEMO_TENANTS,
@@ -36,7 +37,12 @@ describe("transactional messaging flow", () => {
     new TicketCreatedNotificationService(idempotency),
     requestContext,
   );
-  const tickets = new TicketCommandService(prisma, events, new TicketQueryService(prisma));
+  const tickets = new TicketCommandService(
+    prisma,
+    events,
+    new TicketQueryService(prisma),
+    new SlaLifecycleService(),
+  );
   const createdTicketIds = new Set<string>();
   const sourceMessageIds = new Set<string>();
   let initialCounter: number | null = null;

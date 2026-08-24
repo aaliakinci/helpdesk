@@ -80,6 +80,11 @@ export class QueueReadGuard extends PermissionGuard {
   readonly permission = "queues.read";
 }
 
+export class SlaReadGuard extends PermissionGuard {
+  readonly id = "sla-read";
+  readonly permission = "sla.read";
+}
+
 export class AuditReadGuard extends PermissionGuard {
   readonly id = "audit-read";
   readonly permission = "audit.read";

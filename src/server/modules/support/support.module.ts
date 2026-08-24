@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { PlatformModule } from "../../platform/index.js";
 import { IdentityModule } from "../identity/index.js";
+import { SlaModule } from "../sla/index.js";
 import { CustomerService } from "./application/customer.service.js";
 import { AssignmentCommandService } from "./application/assignment-command.service.js";
 import { OperationsQueryService } from "./application/operations-query.service.js";
@@ -16,7 +17,7 @@ import { QueuesController } from "./presentation/queues.controller.js";
 import { TicketsController } from "./presentation/tickets.controller.js";
 
 @Module({
-  imports: [PlatformModule, IdentityModule],
+  imports: [PlatformModule, IdentityModule, SlaModule],
   controllers: [CustomersController, OperationsController, QueuesController, TicketsController],
   providers: [
     AssignmentCommandService,

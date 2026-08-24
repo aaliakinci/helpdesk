@@ -14,6 +14,8 @@ import { PrismaClient } from "../platform/database/generated/client.js";
 const customerId = "00000000-0000-4000-8000-000000000301";
 const requesterContactId = "00000000-0000-4000-8000-000000000401";
 const generalSupportQueueId = "00000000-0000-4000-8000-000000000501";
+const acmeSlaPolicyId = "00000000-0000-4000-8000-000000000601";
+const globexSlaPolicyId = "00000000-0000-4000-8000-000000000602";
 
 async function seed(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -251,6 +253,55 @@ async function seed(): Promise<void> {
         },
         update: { status: "ACTIVE" },
       });
+      const policySeeds = [
+        { id: acmeSlaPolicyId, tenantId: DEMO_TENANTS.acme },
+        { id: globexSlaPolicyId, tenantId: DEMO_TENANTS.globex },
+      ];
+      const defaultTargets = [
+        {
+          approachingBeforeMinutes: 60,
+          firstResponseMinutes: 480,
+          priority: "LOW" as const,
+          resolutionMinutes: 2_880,
+        },
+        {
+          approachingBeforeMinutes: 60,
+          firstResponseMinutes: 240,
+          priority: "NORMAL" as const,
+          resolutionMinutes: 1_440,
+        },
+        {
+          approachingBeforeMinutes: 15,
+          firstResponseMinutes: 60,
+          priority: "HIGH" as const,
+          resolutionMinutes: 480,
+        },
+        {
+          approachingBeforeMinutes: 5,
+          firstResponseMinutes: 15,
+          priority: "URGENT" as const,
+          resolutionMinutes: 240,
+        },
+      ];
+      for (const policySeed of policySeeds) {
+        const policy = await transaction.slaPolicy.upsert({
+          create: {
+            autoCloseResolvedMinutes: 4_320,
+            id: policySeed.id,
+            tenantId: policySeed.tenantId,
+          },
+          update: {},
+          where: { tenantId: policySeed.tenantId },
+        });
+        await transaction.slaPolicyTarget.createMany({
+          data: defaultTargets.map((target) => ({
+            ...target,
+            policyId: policy.id,
+            tenantId: policySeed.tenantId,
+          })),
+          skipDuplicates: true,
+        });
+      }
     });
   } finally {
     await prisma.$disconnect();

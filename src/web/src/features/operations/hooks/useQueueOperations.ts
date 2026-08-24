@@ -6,20 +6,12 @@ import { useRealtime } from "@/features/realtime";
 
 import {
   createQueue,
-  getDashboard,
-  listAgentWorkload,
   listEligibleMembers,
   listQueues,
   setQueueMember,
   updateQueue,
 } from "../api/operationsApi";
-import type {
-  AgentWorkload,
-  EligibleQueueMember,
-  OperationsDashboard,
-  QueueMemberStatus,
-  QueueView,
-} from "../api/operationsContract";
+import type { EligibleQueueMember, QueueMemberStatus, QueueView } from "../api/operationsContract";
 import type { CreateQueueFormValues } from "../model/queueForms";
 
 export function useQueueOperations() {
@@ -30,8 +22,6 @@ export function useQueueOperations() {
   const canManage = role === "OWNER" || role === "MANAGER";
   const [queues, setQueues] = useState<readonly QueueView[]>([]);
   const [eligible, setEligible] = useState<readonly EligibleQueueMember[]>([]);
-  const [dashboard, setDashboard] = useState<OperationsDashboard | null>(null);
-  const [workload, setWorkload] = useState<readonly AgentWorkload[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,16 +38,12 @@ export function useQueueOperations() {
       setLoading(true);
       setError(null);
       try {
-        const [nextQueues, nextDashboard, nextWorkload, nextEligible] = await Promise.all([
+        const [nextQueues, nextEligible] = await Promise.all([
           listQueues(controller.signal),
-          getDashboard(controller.signal),
-          listAgentWorkload(controller.signal),
           canManage ? listEligibleMembers(controller.signal) : Promise.resolve([]),
         ]);
         if (controller.signal.aborted) return;
         setQueues(nextQueues);
-        setDashboard(nextDashboard);
-        setWorkload(nextWorkload);
         setEligible(nextEligible);
       } catch {
         if (!controller.signal.aborted) setError(t("app:queues.loadError"));
@@ -88,12 +74,10 @@ export function useQueueOperations() {
   return {
     busy,
     canManage,
-    dashboard,
     eligible,
     error,
     loading,
     queues,
-    workload,
     create: (values: CreateQueueFormValues) =>
       perform(() =>
         createQueue({

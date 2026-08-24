@@ -86,6 +86,18 @@ enum TicketAssignmentAction {
   ROUND_ROBIN_ASSIGNED
 }
 
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+enum SlaMilestoneStatus {
+  ACTIVE
+  APPROACHING
+  BREACHED
+  COMPLETED
+}
+
 model PlatformMetadata {
   key       String   @id @db.VarChar(100)
   value     String   @db.VarChar(500)
@@ -145,6 +157,8 @@ model Tenant {
   notificationDeliveries NotificationDelivery[]
   queues                 Queue[]
   ticketAssignments      TicketAssignment[]
+  slaPolicy              SlaPolicy?
+  ticketSlaStates        TicketSlaState[]
 
   @@map("tenants")
 }
@@ -310,6 +324,7 @@ model Ticket {
   currentAssignee             TenantMembership?     @relation("TicketCurrentAssignee", fields: [tenantId, currentAssigneeMembershipId], references: [tenantId, id], onDelete: Restrict)
   assignmentHistory           TicketAssignment[]
   notifications               Notification[]
+  slaState                    TicketSlaState?
 
   @@unique([tenantId, id], map: "tickets_tenant_id_id_key")
   @@unique([tenantId, number], map: "tickets_tenant_number_key")
@@ -418,17 +433,18 @@ model TicketComment {
 }
 
 model TicketStatusHistory {
-  id          String        @id @default(uuid()) @db.Uuid
-  tenantId    String        @map("tenant_id") @db.Uuid
-  ticketId    String        @map("ticket_id") @db.Uuid
-  actorUserId String        @map("actor_user_id") @db.Uuid
-  fromStatus  TicketStatus? @map("from_status")
-  toStatus    TicketStatus  @map("to_status")
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @map("tenant_id") @db.Uuid
+  ticketId    String         @map("ticket_id") @db.Uuid
+  actorType   AuditActorType @default(USER) @map("actor_type")
+  actorUserId String?        @map("actor_user_id") @db.Uuid
+  fromStatus  TicketStatus?  @map("from_status")
+  toStatus    TicketStatus   @map("to_status")
   version     Int
-  occurredAt  DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticket      Ticket        @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
-  actor       User          @relation("TicketStatusActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  occurredAt  DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket      Ticket         @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  actor       User?          @relation("TicketStatusActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, ticketId, version], map: "ticket_status_history_ticket_version_key")
   @@index([tenantId, ticketId, occurredAt], map: "ticket_status_history_tenant_ticket_occurred_idx")
@@ -482,19 +498,85 @@ model Attachment {
 }
 
 model AuditEntry {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  actorUserId   String   @map("actor_user_id") @db.Uuid
-  action        String   @db.VarChar(100)
-  aggregateType String   @map("aggregate_type") @db.VarChar(80)
-  aggregateId   String   @map("aggregate_id") @db.Uuid
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  actorType     AuditActorType @default(USER) @map("actor_type")
+  actorUserId   String?        @map("actor_user_id") @db.Uuid
+  action        String         @db.VarChar(100)
+  aggregateType String         @map("aggregate_type") @db.VarChar(80)
+  aggregateId   String         @map("aggregate_id") @db.Uuid
   metadata      Json?
-  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actor         User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  occurredAt    DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor         User?          @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, aggregateType, aggregateId, occurredAt], map: "audit_entries_tenant_aggregate_occurred_idx")
   @@map("audit_entries")
+}
+
+model SlaPolicy {
+  id                       String            @id @default(uuid()) @db.Uuid
+  tenantId                 String            @unique(map: "sla_policies_tenant_id_key") @map("tenant_id") @db.Uuid
+  version                  Int               @default(1)
+  autoCloseResolvedMinutes Int               @map("auto_close_resolved_minutes")
+  createdAt                DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  targets                  SlaPolicyTarget[]
+  ticketStates             TicketSlaState[]
+
+  @@unique([tenantId, id], map: "sla_policies_tenant_id_id_key")
+  @@map("sla_policies")
+}
+
+model SlaPolicyTarget {
+  tenantId                 String         @map("tenant_id") @db.Uuid
+  policyId                 String         @map("policy_id") @db.Uuid
+  priority                 TicketPriority
+  firstResponseMinutes     Int            @map("first_response_minutes")
+  resolutionMinutes        Int            @map("resolution_minutes")
+  approachingBeforeMinutes Int            @map("approaching_before_minutes")
+  policy                   SlaPolicy      @relation(fields: [tenantId, policyId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, policyId, priority])
+  @@map("sla_policy_targets")
+}
+
+model TicketSlaState {
+  tenantId                         String             @map("tenant_id") @db.Uuid
+  ticketId                         String             @map("ticket_id") @db.Uuid
+  policyId                         String             @map("policy_id") @db.Uuid
+  policyVersion                    Int                @map("policy_version")
+  prioritySnapshot                 TicketPriority     @map("priority_snapshot")
+  firstResponseMinutesSnapshot     Int                @map("first_response_minutes_snapshot")
+  resolutionMinutesSnapshot        Int                @map("resolution_minutes_snapshot")
+  approachingBeforeMinutesSnapshot Int                @map("approaching_before_minutes_snapshot")
+  autoCloseResolvedMinutesSnapshot Int                @map("auto_close_resolved_minutes_snapshot")
+  firstResponseDueAt               DateTime           @map("first_response_due_at") @db.Timestamptz(3)
+  resolutionDueAt                  DateTime           @map("resolution_due_at") @db.Timestamptz(3)
+  firstResponseApproachingAt       DateTime           @map("first_response_approaching_at") @db.Timestamptz(3)
+  resolutionApproachingAt          DateTime           @map("resolution_approaching_at") @db.Timestamptz(3)
+  firstResponseStatus              SlaMilestoneStatus @default(ACTIVE) @map("first_response_status")
+  resolutionStatus                 SlaMilestoneStatus @default(ACTIVE) @map("resolution_status")
+  firstResponseCompletedAt         DateTime?          @map("first_response_completed_at") @db.Timestamptz(3)
+  resolutionCompletedAt            DateTime?          @map("resolution_completed_at") @db.Timestamptz(3)
+  firstResponseApproachingSentAt   DateTime?          @map("first_response_approaching_sent_at") @db.Timestamptz(3)
+  firstResponseBreachedAt          DateTime?          @map("first_response_breached_at") @db.Timestamptz(3)
+  resolutionApproachingSentAt      DateTime?          @map("resolution_approaching_sent_at") @db.Timestamptz(3)
+  resolutionBreachedAt             DateTime?          @map("resolution_breached_at") @db.Timestamptz(3)
+  autoCloseAt                      DateTime?          @map("auto_close_at") @db.Timestamptz(3)
+  version                          Int                @default(1)
+  createdAt                        DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket                           Ticket             @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  policy                           SlaPolicy          @relation(fields: [tenantId, policyId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, ticketId])
+  @@index([firstResponseStatus, firstResponseApproachingAt, firstResponseDueAt], map: "ticket_sla_first_response_due_idx")
+  @@index([resolutionStatus, resolutionApproachingAt, resolutionDueAt], map: "ticket_sla_resolution_due_idx")
+  @@index([autoCloseAt], map: "ticket_sla_auto_close_idx")
+  @@map("ticket_sla_states")
 }
 
 model OutboxMessage {

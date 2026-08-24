@@ -151,10 +151,28 @@ export class TicketQueryService {
         reopenedFrom: { select: { id: true, number: true } },
         reopenedTickets: { orderBy: { number: "asc" }, select: { id: true, number: true } },
         resolvedAt: true,
+        slaState: {
+          select: {
+            autoCloseAt: true,
+            firstResponseApproachingSentAt: true,
+            firstResponseBreachedAt: true,
+            firstResponseCompletedAt: true,
+            firstResponseDueAt: true,
+            firstResponseStatus: true,
+            policyVersion: true,
+            prioritySnapshot: true,
+            resolutionApproachingSentAt: true,
+            resolutionBreachedAt: true,
+            resolutionCompletedAt: true,
+            resolutionDueAt: true,
+            resolutionStatus: true,
+          },
+        },
         statusHistory: {
           orderBy: [{ version: "asc" }, { id: "asc" }],
           select: {
             actor: { select: { displayName: true, id: true } },
+            actorType: true,
             fromStatus: true,
             id: true,
             occurredAt: true,
@@ -196,7 +214,11 @@ export class TicketQueryService {
               version: entry.version,
             })),
             statusHistory: ticket.statusHistory.map((entry) => ({
-              actor: entry.actor,
+              actor: {
+                displayName: entry.actor?.displayName ?? null,
+                id: entry.actor?.id ?? null,
+                type: entry.actorType,
+              },
               fromStatus: entry.fromStatus,
               id: entry.id,
               occurredAtUtc: entry.occurredAt.toISOString(),
@@ -217,6 +239,34 @@ export class TicketQueryService {
       reopenedFrom: ticket.reopenedFrom,
       reopenedTickets: ticket.reopenedTickets,
       resolvedAtUtc: ticket.resolvedAt?.toISOString() ?? null,
+      ...(!isRequester
+        ? {
+            sla: ticket.slaState
+              ? {
+                  autoCloseAtUtc: ticket.slaState.autoCloseAt?.toISOString() ?? null,
+                  firstResponse: {
+                    approachingSentAtUtc:
+                      ticket.slaState.firstResponseApproachingSentAt?.toISOString() ?? null,
+                    breachedAtUtc: ticket.slaState.firstResponseBreachedAt?.toISOString() ?? null,
+                    completedAtUtc: ticket.slaState.firstResponseCompletedAt?.toISOString() ?? null,
+                    dueAtUtc: ticket.slaState.firstResponseDueAt.toISOString(),
+                    status: ticket.slaState.firstResponseStatus,
+                  },
+                  policyVersion: ticket.slaState.policyVersion,
+                  prioritySnapshot: ticket.slaState.prioritySnapshot,
+                  resolution: {
+                    approachingSentAtUtc:
+                      ticket.slaState.resolutionApproachingSentAt?.toISOString() ?? null,
+                    breachedAtUtc: ticket.slaState.resolutionBreachedAt?.toISOString() ?? null,
+                    completedAtUtc: ticket.slaState.resolutionCompletedAt?.toISOString() ?? null,
+                    dueAtUtc: ticket.slaState.resolutionDueAt.toISOString(),
+                    status: ticket.slaState.resolutionStatus,
+                  },
+                  wallClock: true as const,
+                }
+              : null,
+          }
+        : {}),
       tags: ticket.tags.map(({ tag }) => tag),
     };
   }

@@ -64,7 +64,11 @@ export interface TicketCommentView {
 }
 
 export interface TicketStatusHistoryView {
-  readonly actor: { readonly displayName: string; readonly id: string };
+  readonly actor: {
+    readonly displayName: string | null;
+    readonly id: string | null;
+    readonly type: "SYSTEM" | "USER";
+  };
   readonly fromStatus: TicketStatus | null;
   readonly id: string;
   readonly occurredAtUtc: string;
@@ -80,8 +84,28 @@ export interface TicketDetail extends TicketSummary {
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
+  readonly sla?: TicketSlaView | null;
   readonly statusHistory?: readonly TicketStatusHistoryView[];
   readonly tags: readonly { readonly id: string; readonly name: string }[];
+}
+
+export type SlaMilestoneViewStatus = "ACTIVE" | "APPROACHING" | "BREACHED" | "COMPLETED";
+
+export interface TicketSlaView {
+  readonly autoCloseAtUtc: string | null;
+  readonly firstResponse: TicketSlaMilestoneView;
+  readonly policyVersion: number;
+  readonly prioritySnapshot: TicketPriority;
+  readonly resolution: TicketSlaMilestoneView;
+  readonly wallClock: true;
+}
+
+export interface TicketSlaMilestoneView {
+  readonly approachingSentAtUtc: string | null;
+  readonly breachedAtUtc: string | null;
+  readonly completedAtUtc: string | null;
+  readonly dueAtUtc: string;
+  readonly status: SlaMilestoneViewStatus;
 }
 
 export type TicketAssignmentStatus = "ASSIGNED" | "UNASSIGNED";
@@ -160,11 +184,24 @@ export interface OperationsDashboard {
     readonly unassignedTickets: number;
   }[];
   readonly sla: {
-    readonly breachedTickets: null;
-    readonly dueSoonTickets: null;
-    readonly status: "NOT_CONFIGURED";
+    readonly approachingTickets: number | null;
+    readonly breachedTickets: number | null;
+    readonly status: "ACTIVE" | "NOT_CONFIGURED";
+    readonly warnings: readonly SlaWarningItem[];
   };
   readonly unassignedTickets: number;
+}
+
+export interface SlaWarningItem {
+  readonly assignee: AssignmentPerson | null;
+  readonly firstResponseStatus: Exclude<SlaMilestoneViewStatus, "COMPLETED"> | "COMPLETED";
+  readonly id: string;
+  readonly nextDueAtUtc: string;
+  readonly number: number;
+  readonly priority: TicketPriority;
+  readonly queue: QueueReference | null;
+  readonly resolutionStatus: Exclude<SlaMilestoneViewStatus, "COMPLETED"> | "COMPLETED";
+  readonly subject: string;
 }
 
 export interface AgentWorkloadItem extends AssignmentPerson {

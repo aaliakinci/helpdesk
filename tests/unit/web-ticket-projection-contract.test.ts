@@ -58,5 +58,6 @@ describe("requester ticket projection contract", () => {
     expect(detail.assignmentStatus).toBe("ASSIGNED");
     expect(detail).not.toHaveProperty("assignmentHistory");
     expect(detail).not.toHaveProperty("statusHistory");
+    expect(detail).not.toHaveProperty("sla");
   });
 });

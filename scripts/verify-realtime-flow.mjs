@@ -53,6 +53,7 @@ try {
   assert.equal("queue" in requesterTicket, false);
   assert.equal("assignee" in requesterTicket, false);
   assert.equal("assignmentHistory" in requesterTicket, false);
+  assert.equal("sla" in requesterTicket, false);
 
   const notification = await waitForNotification(created.id, agentLogin.body.accessToken);
   assert.equal(notification.ticketId, created.id);

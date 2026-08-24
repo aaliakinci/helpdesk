@@ -29,11 +29,11 @@ The fixed role catalog is:
 
 | Role      | Current identity capabilities                                                |
 | --------- | ---------------------------------------------------------------------------- |
-| Owner     | Tenant, membership status/role, ticket, queue, and audit permissions         |
-| Manager   | Membership status, ticket, queue, and audit permissions; cannot assign roles |
-| Agent     | Ticket and queue operating permissions                                       |
+| Owner     | Tenant, membership, ticket, queue, SLA management, and audit permissions     |
+| Manager   | Membership status, ticket, queue, SLA management, and audit; no role changes |
+| Agent     | Ticket and queue operations plus read-only SLA visibility                    |
 | Requester | Own-ticket read and ticket-create permissions                                |
-| Auditor   | Read-only membership, ticket, queue, and audit permissions                   |
+| Auditor   | Read-only membership, ticket, queue, SLA, and audit permissions              |
 
 Requester memberships must reference a `customer_contact` from the same tenant. PostgreSQL check
 and composite foreign-key constraints enforce that relationship independently of API code.

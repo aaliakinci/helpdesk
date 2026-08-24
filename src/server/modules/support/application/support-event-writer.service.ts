@@ -9,6 +9,15 @@ interface SupportEventActor {
   readonly userId: string;
 }
 
+interface SupportEventInput {
+  readonly action: string;
+  readonly aggregateId: string;
+  readonly aggregateType: "queue" | "sla_policy" | "ticket";
+  readonly eventType: string;
+  readonly metadata: Readonly<Record<string, Prisma.InputJsonValue>> | null;
+  readonly payload: Readonly<Record<string, Prisma.InputJsonValue>>;
+}
+
 @Injectable()
 export class SupportEventWriter {
   public constructor(private readonly requestContext: RequestContextService) {}
@@ -16,25 +25,36 @@ export class SupportEventWriter {
   public async write(
     transaction: Prisma.TransactionClient,
     identity: SupportEventActor,
-    input: {
-      readonly action: string;
-      readonly aggregateId: string;
-      readonly aggregateType: "queue" | "ticket";
-      readonly eventType: string;
-      readonly metadata: Readonly<Record<string, Prisma.InputJsonValue>> | null;
-      readonly payload: Readonly<Record<string, Prisma.InputJsonValue>>;
-    },
-  ): Promise<void> {
+    input: SupportEventInput,
+  ): Promise<string> {
+    return this.writeEvent(transaction, identity.tenantId, identity.userId, input);
+  }
+
+  public async writeSystem(
+    transaction: Prisma.TransactionClient,
+    tenantId: string,
+    input: SupportEventInput,
+  ): Promise<string> {
+    return this.writeEvent(transaction, tenantId, null, input);
+  }
+
+  private async writeEvent(
+    transaction: Prisma.TransactionClient,
+    tenantId: string,
+    actorUserId: string | null,
+    input: SupportEventInput,
+  ): Promise<string> {
     const messageId = randomUUID();
     const occurredAtUtc = new Date().toISOString();
     await transaction.auditEntry.create({
       data: {
         action: input.action,
-        actorUserId: identity.userId,
+        actorType: actorUserId ? "USER" : "SYSTEM",
+        ...(actorUserId ? { actorUserId } : {}),
         aggregateId: input.aggregateId,
         aggregateType: input.aggregateType,
         ...(input.metadata ? { metadata: input.metadata } : {}),
-        tenantId: identity.tenantId,
+        tenantId,
       },
     });
     await transaction.outboxMessage.create({
@@ -55,11 +75,12 @@ export class SupportEventWriter {
           messageId,
           occurredAtUtc,
           schemaVersion: 1,
-          tenantId: identity.tenantId,
+          tenantId,
         },
         schemaVersion: 1,
-        tenantId: identity.tenantId,
+        tenantId,
       },
     });
+    return messageId;
   }
 }

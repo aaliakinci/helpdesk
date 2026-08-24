@@ -9,6 +9,7 @@ import { PrismaService } from "../../../platform/index.js";
 import type { Prisma } from "../../../platform/database/generated/client.js";
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
 import { hasPermission } from "../../identity/domain/permissions.js";
+import { SlaLifecycleService } from "../../sla/index.js";
 import {
   canTransitionTicket,
   type TicketCommentVisibility,
@@ -26,6 +27,7 @@ export class TicketCommandService {
     private readonly prisma: PrismaService,
     private readonly events: SupportEventWriter,
     private readonly queries: TicketQueryService,
+    private readonly sla: SlaLifecycleService,
   ) {}
 
   public async createTicket(
@@ -84,7 +86,9 @@ export class TicketCommandService {
       const now = new Date();
       const nextVersion = input.expectedVersion + 1;
       const firstResponseAt =
-        !isRequester && input.visibility === "PUBLIC" && ticket.firstResponseAt === null
+        (identity.role === "AGENT" || identity.role === "MANAGER") &&
+        input.visibility === "PUBLIC" &&
+        ticket.firstResponseAt === null
           ? now
           : undefined;
       const advanced = await transaction.ticket.updateMany({
@@ -95,6 +99,14 @@ export class TicketCommandService {
         },
       });
       if (advanced.count !== 1) throw new ConflictException("Ticket revision is stale.");
+      if (firstResponseAt) {
+        await this.sla.completeFirstResponse(
+          transaction,
+          identity.tenantId,
+          ticket.id,
+          firstResponseAt,
+        );
+      }
 
       const comment = await transaction.ticketComment.create({
         data: {
@@ -152,6 +164,11 @@ export class TicketCommandService {
         },
       });
       if (advanced.count !== 1) throw new ConflictException("Ticket revision is stale.");
+      if (input.status === "RESOLVED") {
+        await this.sla.completeResolution(transaction, identity.tenantId, ticket.id, now);
+      } else if (ticket.status === "RESOLVED") {
+        await this.sla.cancelAutoClose(transaction, identity.tenantId, ticket.id);
+      }
       await transaction.ticketStatusHistory.create({
         data: {
           actorUserId: identity.userId,
@@ -252,6 +269,12 @@ export class TicketCommandService {
         subject: input.subject,
         tenantId: identity.tenantId,
       },
+    });
+    await this.sla.createForTicket(transaction, {
+      createdAt: ticket.createdAt,
+      priority: ticket.priority,
+      tenantId: identity.tenantId,
+      ticketId: ticket.id,
     });
     await transaction.ticketStatusHistory.create({
       data: {

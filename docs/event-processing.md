@@ -57,6 +57,23 @@ Assignment is eventual: the ticket transaction succeeds without RabbitMQ being a
 
 The included email provider is deliberately local and logs only operational identifiers. A production provider adapter must accept the supplied deduplication key and must not log recipient addresses or message content.
 
+## SLA scheduler
+
+The worker scans at most `SLA_SCHEDULER_BATCH_SIZE` due ticket SLA rows per interval. Candidate
+selection uses PostgreSQL `CURRENT_TIMESTAMP` and `FOR UPDATE SKIP LOCKED`, so multiple workers can
+share the schedule without processing the same locked state. `SLA_SCHEDULER_INTERVAL_MS` controls
+the interval; neither value changes SLA meaning.
+
+An approaching or breached transition, its system audit entry, outbox event, in-app notifications,
+and deterministic delivery keys commit in one transaction. The stored milestone state prevents a
+restart or overlapping scan from producing the same warning twice. The realtime API projects the
+outbox event as a small `ticket.sla_warning` invalidation and browsers reconcile notification and
+dashboard data through authorized REST reads.
+
+Resolved tickets receive an `auto_close_at` instant from their ticket snapshot. A due row advances
+the ticket to Closed with a SYSTEM status-history actor and `ticket.status-changed.v1` event. A
+manual reopen of a Resolved ticket cancels that pending auto-close; Closed remains terminal.
+
 ## DLQ inspection and replay
 
 Use the RabbitMQ management UI at `http://127.0.0.1:15672` in local development and inspect `helpdesk.worker.dlq.v1`. Review the `message_id`, event `type`, `traceparent`, `x-helpdesk-attempt`, and `x-helpdesk-error` headers together with worker logs before replaying.

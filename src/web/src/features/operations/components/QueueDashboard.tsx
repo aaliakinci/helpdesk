@@ -20,7 +20,7 @@ export function QueueDashboard({
       sx={{
         display: "grid",
         gap: 2,
-        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" },
+        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr)" },
       }}
     >
       <MetricCard
@@ -39,9 +39,22 @@ export function QueueDashboard({
         value={dashboard.myOpenTickets}
       />
       <MetricCard
-        id={`${id}.sla`}
-        label={t("app:queues.dashboard.sla")}
-        value={t("app:queues.dashboard.notConfigured")}
+        id={`${id}.approaching`}
+        label={t("app:operations.metrics.approaching")}
+        value={
+          dashboard.sla.status === "ACTIVE"
+            ? (dashboard.sla.approachingTickets ?? 0)
+            : t("app:queues.dashboard.notConfigured")
+        }
+      />
+      <MetricCard
+        id={`${id}.breached`}
+        label={t("app:operations.metrics.breached")}
+        value={
+          dashboard.sla.status === "ACTIVE"
+            ? (dashboard.sla.breachedTickets ?? 0)
+            : t("app:queues.dashboard.notConfigured")
+        }
       />
     </Box>
   );

@@ -7,10 +7,13 @@ export interface NotificationItem {
   readonly createdAtUtc: string;
   readonly id: string;
   readonly kind: string;
+  readonly dueAtUtc: string | null;
+  readonly milestone: "FIRST_RESPONSE" | "RESOLUTION" | null;
   readonly readAtUtc: string | null;
   readonly subject: string | null;
   readonly ticketId: string | null;
   readonly ticketNumber: number | null;
+  readonly warningStage: "APPROACHING" | "BREACHED" | null;
 }
 
 @Injectable()
@@ -78,17 +81,33 @@ function toNotificationItem(notification: {
 }): NotificationItem {
   const payload = asRecord(notification.payload);
   const knownAssignment = notification.kind === "TICKET_AUTO_ASSIGNED";
+  const knownSla =
+    notification.kind === "TICKET_SLA_APPROACHING" || notification.kind === "TICKET_SLA_BREACHED";
+  const milestone =
+    knownSla && (payload?.milestone === "FIRST_RESPONSE" || payload?.milestone === "RESOLUTION")
+      ? payload.milestone
+      : null;
+  const warningStage =
+    knownSla && (payload?.stage === "APPROACHING" || payload?.stage === "BREACHED")
+      ? payload.stage
+      : null;
   return {
     createdAtUtc: notification.createdAt.toISOString(),
+    dueAtUtc: knownSla && typeof payload?.dueAtUtc === "string" ? payload.dueAtUtc : null,
     id: notification.id,
     kind: notification.kind,
+    milestone,
     readAtUtc: notification.readAt?.toISOString() ?? null,
-    subject: knownAssignment && typeof payload?.subject === "string" ? payload.subject : null,
+    subject:
+      (knownAssignment || knownSla) && typeof payload?.subject === "string"
+        ? payload.subject
+        : null,
     ticketId: notification.ticketId,
     ticketNumber:
-      knownAssignment && Number.isInteger(payload?.ticketNumber)
+      (knownAssignment || knownSla) && Number.isInteger(payload?.ticketNumber)
         ? Number(payload?.ticketNumber)
         : null,
+    warningStage,
   };
 }
 
