@@ -29,6 +29,7 @@
     "prisma:generate": "prisma generate",
     "smoke:services": "node scripts/verify-running-services.mjs",
     "smoke:identity": "node scripts/verify-auth-flow.mjs",
+    "smoke:support": "node scripts/verify-support-flow.mjs",
     "start:api": "node --enable-source-maps dist/server/apps/support-api/src/main.js",
     "start:worker": "node --enable-source-maps dist/server/apps/support-worker/src/main.js",
     "test": "npm run test:unit",

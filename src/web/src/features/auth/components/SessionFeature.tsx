@@ -4,7 +4,7 @@ import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
 import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useAppTranslation } from "@/i18n";
 import { PublicShell } from "@/shared/components";
@@ -13,11 +13,12 @@ import { useAuth } from "../model/authContext";
 import { workspaceLandingPath } from "../model/workspaceLanding";
 
 interface SessionFeatureProps {
+  readonly children?: ReactNode;
   readonly id: string;
   readonly mode: "staff" | "requester" | "auditor";
 }
 
-export function SessionFeature({ id, mode }: SessionFeatureProps) {
+export function SessionFeature({ children, id, mode }: SessionFeatureProps) {
   const auth = useAuth();
   const navigate = useLilyNavigate();
   const { changeLocale, locale, t } = useAppTranslation();
@@ -130,6 +131,7 @@ export function SessionFeature({ id, mode }: SessionFeatureProps) {
             </Stack>
           </Stack>
         )}
+        {children}
         <Stack id={`${id}.actions`} direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button
             id={`${id}.logout`}

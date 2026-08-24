@@ -36,6 +36,12 @@ const workspacePage = lazyPage(async () => ({
 const requesterPortalPage = lazyPage(async () => ({
   default: (await import("@/pages/RequesterPortalPage")).RequesterPortalPage,
 }));
+const workspaceTicketPage = lazyPage(async () => ({
+  default: (await import("@/pages/WorkspaceTicketPage")).WorkspaceTicketPage,
+}));
+const requesterTicketPage = lazyPage(async () => ({
+  default: (await import("@/pages/RequesterTicketPage")).RequesterTicketPage,
+}));
 const auditWorkspacePage = lazyPage(async () => ({
   default: (await import("@/pages/AuditWorkspacePage")).AuditWorkspacePage,
 }));
@@ -57,9 +63,21 @@ export const APP_ROUTES = routerKit.createRoutes([
     guards: [AuthenticatedGuard, StaffGuard],
   },
   {
+    id: "workspace-ticket",
+    path: "/workspace/tickets/:ticketId",
+    page: workspaceTicketPage,
+    guards: [AuthenticatedGuard, StaffGuard],
+  },
+  {
     id: "requester-portal",
     path: "/portal",
     page: requesterPortalPage,
+    guards: [AuthenticatedGuard, RequesterGuard],
+  },
+  {
+    id: "requester-ticket",
+    path: "/portal/tickets/:ticketId",
+    page: requesterTicketPage,
     guards: [AuthenticatedGuard, RequesterGuard],
   },
   {

@@ -7,6 +7,8 @@ export const PERMISSIONS = [
   "memberships.read",
   "memberships.manage-status",
   "memberships.manage-role",
+  "customers.read",
+  "customers.manage",
   "tickets.read",
   "tickets.read-own",
   "tickets.create",
@@ -24,6 +26,8 @@ const ROLE_PERMISSIONS: Readonly<Record<TenantRole, readonly Permission[]>> = {
     "tenant.read",
     "memberships.read",
     "memberships.manage-status",
+    "customers.read",
+    "customers.manage",
     "tickets.read",
     "tickets.create",
     "tickets.manage",
@@ -31,9 +35,23 @@ const ROLE_PERMISSIONS: Readonly<Record<TenantRole, readonly Permission[]>> = {
     "queues.manage",
     "audit.read",
   ],
-  AGENT: ["tenant.read", "tickets.read", "tickets.create", "tickets.manage", "queues.read"],
+  AGENT: [
+    "tenant.read",
+    "customers.read",
+    "tickets.read",
+    "tickets.create",
+    "tickets.manage",
+    "queues.read",
+  ],
   REQUESTER: ["tenant.read", "tickets.read-own", "tickets.create"],
-  AUDITOR: ["tenant.read", "memberships.read", "tickets.read", "queues.read", "audit.read"],
+  AUDITOR: [
+    "tenant.read",
+    "memberships.read",
+    "customers.read",
+    "tickets.read",
+    "queues.read",
+    "audit.read",
+  ],
 };
 
 export function permissionsForRole(role: TenantRole): readonly Permission[] {

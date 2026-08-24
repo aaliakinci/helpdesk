@@ -58,3 +58,37 @@ membership ownership before changing context.
 Membership reads and mutations are always scoped by `(tenant_id, id)`. A valid foreign-tenant UUID
 therefore returns the same non-disclosing `404` as an unknown UUID. Role and status mutations also
 enforce permissions inside the application use case and generate an identity audit entry.
+
+## Customers and contacts
+
+- `GET /api/v1/customers` and `GET /api/v1/customers/:customerId` return only active-tenant data.
+- `POST /api/v1/customers` and `PATCH /api/v1/customers/:customerId` require customer-management
+  permission.
+- `POST /api/v1/customers/:customerId/contacts` and
+  `PATCH /api/v1/customers/:customerId/contacts/:contactId` preserve the customer aggregate
+  revision and same-tenant contact ownership.
+- `GET /api/v1/customers/:customerId/history` returns customer and contact changes in reverse
+  chronological order.
+
+Customer and contact writes require `expectedVersion` after initial creation. A stale revision
+returns `409` and does not partially update the aggregate or history.
+
+## Tickets
+
+- `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `status`, `priority`, `sortBy`, and
+  `sortDirection` parameters.
+- `POST /api/v1/tickets` creates a ticket, initial status history, audit entry, and
+  `ticket.created.v1` outbox message in one transaction.
+- `GET /api/v1/tickets/:ticketId` applies role-specific projection. Requesters can read only tickets
+  attached to their server-derived customer contact and never receive internal comments.
+- `POST /api/v1/tickets/:ticketId/comments` creates a public reply or staff-only internal note and
+  requires `expectedVersion`.
+- `PATCH /api/v1/tickets/:ticketId/status` applies the fixed state machine and requires
+  `expectedVersion`.
+- `POST /api/v1/tickets/:ticketId/reopen` moves a resolved ticket to Open or creates a new linked
+  ticket when the source is Closed.
+
+Ticket numbers are allocated atomically per tenant. Every successful comment or status mutation
+increments `version`; concurrent writes against the same revision produce one success and one
+stable `409`. Closed tickets are terminal and immutable except through the explicit linked-reopen
+operation.

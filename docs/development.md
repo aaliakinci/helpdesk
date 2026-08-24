@@ -48,12 +48,15 @@ With the complete Compose topology running:
 ```bash
 npm run smoke:services
 npm run smoke:identity
+npm run smoke:support
 ```
 
-`smoke:identity` requires `DEMO_SEED_PASSWORD` and uses the running API; it never prints the
-password, access token, or refresh cookie. `verify` is the static and build gate. The GitHub Actions
-workflow additionally applies migrations, seeds deterministic test identities, and runs the
-infrastructure integration suite.
+The identity and support smoke commands require `DEMO_SEED_PASSWORD` and use the running API; they
+never print the password, access token, or refresh cookie. The support smoke covers requester
+creation/reply, staff public/internal replies, status transitions, stale revisions, linked reopen,
+role boundaries, and cross-tenant reads. `verify` is the static and build gate. The GitHub Actions
+workflow additionally applies migrations, seeds deterministic test identities, and runs the real
+infrastructure integration suite serially because all files share one qualified database.
 
 ## Service lifecycle
 

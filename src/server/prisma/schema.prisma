@@ -31,6 +31,32 @@ enum TenantRole {
   AUDITOR
 }
 
+enum TicketStatus {
+  NEW
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketCommentVisibility {
+  PUBLIC
+  INTERNAL
+}
+
+enum OutboxMessageStatus {
+  PENDING
+  PUBLISHED
+  FAILED
+}
+
 model PlatformMetadata {
   key       String   @id @db.VarChar(100)
   value     String   @db.VarChar(500)
@@ -40,46 +66,64 @@ model PlatformMetadata {
 }
 
 model User {
-  id            String     @id @default(uuid()) @db.Uuid
-  email         String     @unique(map: "users_email_key") @db.VarChar(254)
-  displayName   String     @map("display_name") @db.VarChar(120)
-  passwordHash  String     @map("password_hash") @db.VarChar(255)
-  status        UserStatus @default(ACTIVE)
-  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships   TenantMembership[]
-  sessions      UserSession[]
-  contacts      CustomerContact[]
-  identityAudit IdentityAuditEntry[] @relation("IdentityAuditActor")
+  id                  String                 @id @default(uuid()) @db.Uuid
+  email               String                 @unique(map: "users_email_key") @db.VarChar(254)
+  displayName         String                 @map("display_name") @db.VarChar(120)
+  passwordHash        String                 @map("password_hash") @db.VarChar(255)
+  status              UserStatus             @default(ACTIVE)
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships         TenantMembership[]
+  sessions            UserSession[]
+  contacts            CustomerContact[]
+  identityAudit       IdentityAuditEntry[]   @relation("IdentityAuditActor")
+  createdTickets      Ticket[]               @relation("TicketCreator")
+  ticketComments      TicketComment[]        @relation("TicketCommentAuthor")
+  ticketStatusHistory TicketStatusHistory[]  @relation("TicketStatusActor")
+  customerHistory     CustomerHistoryEntry[] @relation("CustomerHistoryActor")
+  auditEntries        AuditEntry[]           @relation("AuditActor")
+  attachments         Attachment[]           @relation("AttachmentCreator")
 
   @@map("users")
 }
 
 model Tenant {
-  id            String       @id @default(uuid()) @db.Uuid
-  slug          String       @unique(map: "tenants_slug_key") @db.VarChar(80)
-  name          String       @db.VarChar(120)
-  timeZone      String       @default("Europe/Istanbul") @map("time_zone") @db.VarChar(80)
-  status        TenantStatus @default(ACTIVE)
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships   TenantMembership[]
-  customers     Customer[]
-  contacts      CustomerContact[]
-  sessions      UserSession[]
-  identityAudit IdentityAuditEntry[]
+  id                  String                 @id @default(uuid()) @db.Uuid
+  slug                String                 @unique(map: "tenants_slug_key") @db.VarChar(80)
+  name                String                 @db.VarChar(120)
+  timeZone            String                 @default("Europe/Istanbul") @map("time_zone") @db.VarChar(80)
+  status              TenantStatus           @default(ACTIVE)
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships         TenantMembership[]
+  customers           Customer[]
+  contacts            CustomerContact[]
+  sessions            UserSession[]
+  identityAudit       IdentityAuditEntry[]
+  customerHistory     CustomerHistoryEntry[]
+  ticketCounter       TenantTicketCounter?
+  tickets             Ticket[]
+  ticketComments      TicketComment[]
+  ticketStatusHistory TicketStatusHistory[]
+  tags                Tag[]
+  ticketTags          TicketTag[]
+  attachments         Attachment[]
+  auditEntries        AuditEntry[]
+  outboxMessages      OutboxMessage[]
 
   @@map("tenants")
 }
 
 model Customer {
-  id        String            @id @default(uuid()) @db.Uuid
-  tenantId  String            @map("tenant_id") @db.Uuid
-  name      String            @db.VarChar(160)
-  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id        String                 @id @default(uuid()) @db.Uuid
+  tenantId  String                 @map("tenant_id") @db.Uuid
+  name      String                 @db.VarChar(160)
+  version   Int                    @default(1)
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contacts  CustomerContact[]
+  history   CustomerHistoryEntry[]
 
   @@unique([tenantId, id], map: "customers_tenant_id_id_key")
   @@index([tenantId, name], map: "customers_tenant_name_idx")
@@ -99,6 +143,7 @@ model CustomerContact {
   customer    Customer           @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Cascade)
   user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   memberships TenantMembership[]
+  tickets     Ticket[]
 
   @@unique([tenantId, id], map: "customer_contacts_tenant_id_id_key")
   @@unique([tenantId, email], map: "customer_contacts_tenant_email_key")
@@ -128,20 +173,20 @@ model TenantMembership {
 }
 
 model UserSession {
-  id               String            @id @default(uuid()) @db.Uuid
-  familyId         String            @map("family_id") @db.Uuid
-  tenantId         String            @map("tenant_id") @db.Uuid
-  userId           String            @map("user_id") @db.Uuid
-  membershipId     String            @map("membership_id") @db.Uuid
-  refreshTokenHash String            @unique(map: "user_sessions_refresh_token_hash_key") @map("refresh_token_hash") @db.Char(64)
-  issuedAt         DateTime          @default(now()) @map("issued_at") @db.Timestamptz(3)
-  expiresAt        DateTime          @map("expires_at") @db.Timestamptz(3)
-  lastUsedAt       DateTime?         @map("last_used_at") @db.Timestamptz(3)
-  revokedAt        DateTime?         @map("revoked_at") @db.Timestamptz(3)
-  revokeReason     String?           @map("revoke_reason") @db.VarChar(80)
-  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  membership       TenantMembership  @relation(fields: [tenantId, userId, membershipId], references: [tenantId, userId, id], onDelete: Cascade)
+  id               String           @id @default(uuid()) @db.Uuid
+  familyId         String           @map("family_id") @db.Uuid
+  tenantId         String           @map("tenant_id") @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  membershipId     String           @map("membership_id") @db.Uuid
+  refreshTokenHash String           @unique(map: "user_sessions_refresh_token_hash_key") @map("refresh_token_hash") @db.Char(64)
+  issuedAt         DateTime         @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt        DateTime         @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt       DateTime?        @map("last_used_at") @db.Timestamptz(3)
+  revokedAt        DateTime?        @map("revoked_at") @db.Timestamptz(3)
+  revokeReason     String?          @map("revoke_reason") @db.VarChar(80)
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership       TenantMembership @relation(fields: [tenantId, userId, membershipId], references: [tenantId, userId, id], onDelete: Cascade)
 
   @@index([familyId, revokedAt], map: "user_sessions_family_revoked_idx")
   @@index([userId, revokedAt], map: "user_sessions_user_revoked_idx")
@@ -149,17 +194,201 @@ model UserSession {
 }
 
 model IdentityAuditEntry {
-  id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @map("tenant_id") @db.Uuid
-  actorUserId  String   @map("actor_user_id") @db.Uuid
-  action       String   @db.VarChar(100)
-  subjectType  String   @map("subject_type") @db.VarChar(80)
-  subjectId    String   @map("subject_id") @db.Uuid
-  metadata     Json?
-  occurredAt   DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actor        User     @relation("IdentityAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  subjectType String   @map("subject_type") @db.VarChar(80)
+  subjectId   String   @map("subject_id") @db.Uuid
+  metadata    Json?
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor       User     @relation("IdentityAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, occurredAt], map: "identity_audit_tenant_occurred_idx")
   @@map("identity_audit_entries")
+}
+
+model CustomerHistoryEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  customerId  String   @map("customer_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  subjectType String   @map("subject_type") @db.VarChar(40)
+  subjectId   String   @map("subject_id") @db.Uuid
+  changes     Json?
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [tenantId, customerId], references: [tenantId, id], onDelete: Cascade)
+  actor       User     @relation("CustomerHistoryActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, customerId, occurredAt], map: "customer_history_tenant_customer_occurred_idx")
+  @@map("customer_history_entries")
+}
+
+model TenantTicketCounter {
+  tenantId   String   @id @map("tenant_id") @db.Uuid
+  lastNumber Int      @default(0) @map("last_number")
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_ticket_counters")
+}
+
+model Ticket {
+  id                   String                @id @default(uuid()) @db.Uuid
+  tenantId             String                @map("tenant_id") @db.Uuid
+  number               Int
+  requesterContactId   String                @map("requester_contact_id") @db.Uuid
+  createdByUserId      String                @map("created_by_user_id") @db.Uuid
+  reopenedFromTicketId String?               @map("reopened_from_ticket_id") @db.Uuid
+  subject              String                @db.VarChar(200)
+  description          String                @db.Text
+  status               TicketStatus          @default(NEW)
+  priority             TicketPriority        @default(NORMAL)
+  version              Int                   @default(1)
+  firstResponseAt      DateTime?             @map("first_response_at") @db.Timestamptz(3)
+  resolvedAt           DateTime?             @map("resolved_at") @db.Timestamptz(3)
+  closedAt             DateTime?             @map("closed_at") @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requesterContact     CustomerContact       @relation(fields: [tenantId, requesterContactId], references: [tenantId, id], onDelete: Restrict)
+  createdBy            User                  @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reopenedFrom         Ticket?               @relation("TicketReopen", fields: [tenantId, reopenedFromTicketId], references: [tenantId, id], onDelete: Restrict)
+  reopenedTickets      Ticket[]              @relation("TicketReopen")
+  comments             TicketComment[]
+  statusHistory        TicketStatusHistory[]
+  tags                 TicketTag[]
+  attachments          Attachment[]
+
+  @@unique([tenantId, id], map: "tickets_tenant_id_id_key")
+  @@unique([tenantId, number], map: "tickets_tenant_number_key")
+  @@unique([tenantId, reopenedFromTicketId], map: "tickets_tenant_reopened_from_key")
+  @@index([tenantId, status, updatedAt], map: "tickets_tenant_status_updated_idx")
+  @@index([tenantId, requesterContactId, updatedAt], map: "tickets_tenant_requester_updated_idx")
+  @@index([tenantId, priority, updatedAt], map: "tickets_tenant_priority_updated_idx")
+  @@map("tickets")
+}
+
+model TicketComment {
+  id           String                  @id @default(uuid()) @db.Uuid
+  tenantId     String                  @map("tenant_id") @db.Uuid
+  ticketId     String                  @map("ticket_id") @db.Uuid
+  authorUserId String                  @map("author_user_id") @db.Uuid
+  visibility   TicketCommentVisibility
+  body         String                  @db.Text
+  createdAt    DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket       Ticket                  @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  author       User                    @relation("TicketCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, id], map: "ticket_comments_tenant_id_id_key")
+  @@index([tenantId, ticketId, createdAt], map: "ticket_comments_tenant_ticket_created_idx")
+  @@map("ticket_comments")
+}
+
+model TicketStatusHistory {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  ticketId    String        @map("ticket_id") @db.Uuid
+  actorUserId String        @map("actor_user_id") @db.Uuid
+  fromStatus  TicketStatus? @map("from_status")
+  toStatus    TicketStatus  @map("to_status")
+  version     Int
+  occurredAt  DateTime      @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket      Ticket        @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  actor       User          @relation("TicketStatusActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, ticketId, version], map: "ticket_status_history_ticket_version_key")
+  @@index([tenantId, ticketId, occurredAt], map: "ticket_status_history_tenant_ticket_occurred_idx")
+  @@map("ticket_status_history")
+}
+
+model Tag {
+  id        String      @id @default(uuid()) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  name      String      @db.VarChar(60)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tickets   TicketTag[]
+
+  @@unique([tenantId, id], map: "tags_tenant_id_id_key")
+  @@unique([tenantId, name], map: "tags_tenant_name_key")
+  @@map("tags")
+}
+
+model TicketTag {
+  tenantId String @map("tenant_id") @db.Uuid
+  ticketId String @map("ticket_id") @db.Uuid
+  tagId    String @map("tag_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket   Ticket @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tenantId, tagId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, ticketId, tagId])
+  @@index([tenantId, tagId, ticketId], map: "ticket_tags_tenant_tag_ticket_idx")
+  @@map("ticket_tags")
+}
+
+model Attachment {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  ticketId        String   @map("ticket_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  fileName        String   @map("file_name") @db.VarChar(255)
+  contentType     String   @map("content_type") @db.VarChar(120)
+  byteSize        BigInt   @map("byte_size")
+  storageKey      String   @map("storage_key") @db.VarChar(500)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket          Ticket   @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  createdBy       User     @relation("AttachmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, id], map: "attachments_tenant_id_id_key")
+  @@unique([tenantId, storageKey], map: "attachments_tenant_storage_key_key")
+  @@index([tenantId, ticketId, createdAt], map: "attachments_tenant_ticket_created_idx")
+  @@map("attachments")
+}
+
+model AuditEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  actorUserId   String   @map("actor_user_id") @db.Uuid
+  action        String   @db.VarChar(100)
+  aggregateType String   @map("aggregate_type") @db.VarChar(80)
+  aggregateId   String   @map("aggregate_id") @db.Uuid
+  metadata      Json?
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor         User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, aggregateType, aggregateId, occurredAt], map: "audit_entries_tenant_aggregate_occurred_idx")
+  @@map("audit_entries")
+}
+
+model OutboxMessage {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  aggregateType String              @map("aggregate_type") @db.VarChar(80)
+  aggregateId   String              @map("aggregate_id") @db.Uuid
+  eventType     String              @map("event_type") @db.VarChar(120)
+  schemaVersion Int                 @default(1) @map("schema_version")
+  payload       Json
+  correlationId String?             @map("correlation_id") @db.VarChar(128)
+  causationId   String?             @map("causation_id") @db.VarChar(128)
+  status        OutboxMessageStatus @default(PENDING)
+  attempts      Int                 @default(0)
+  availableAt   DateTime            @default(now()) @map("available_at") @db.Timestamptz(3)
+  occurredAt    DateTime            @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  publishedAt   DateTime?           @map("published_at") @db.Timestamptz(3)
+  lastErrorCode String?             @map("last_error_code") @db.VarChar(100)
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt, occurredAt], map: "outbox_messages_status_available_idx")
+  @@index([tenantId, aggregateType, aggregateId, occurredAt], map: "outbox_messages_tenant_aggregate_idx")
+  @@map("outbox_messages")
 }

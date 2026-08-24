@@ -23,6 +23,6 @@ import { MembershipsController } from "./presentation/memberships.controller.js"
     PermissionGuard,
     RefreshTokenService,
   ],
-  exports: [IdentityService, PasswordHasher],
+  exports: [AccessTokenGuard, IdentityService, PasswordHasher, PermissionGuard],
 })
 export class IdentityModule {}
