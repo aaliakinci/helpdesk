@@ -75,8 +75,9 @@ returns `409` and does not partially update the aggregate or history.
 
 ## Tickets
 
-- `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `status`, `priority`, `sortBy`, and
-  `sortDirection` parameters.
+- `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `status`, `priority`, `queueId`,
+  `assignment`, `sortBy`, and `sortDirection` parameters. `assignment` accepts `ALL`, `MINE`, or
+  `UNASSIGNED`.
 - `POST /api/v1/tickets` creates a ticket, initial status history, audit entry, and
   `ticket.created.v1` outbox message in one transaction.
 - `GET /api/v1/tickets/:ticketId` applies role-specific projection. Requesters can read only tickets
@@ -92,3 +93,30 @@ Ticket numbers are allocated atomically per tenant. Every successful comment or 
 increments `version`; concurrent writes against the same revision produce one success and one
 stable `409`. Closed tickets are terminal and immutable except through the explicit linked-reopen
 operation.
+
+## Queues, assignment, and operations
+
+- `GET /api/v1/queues` returns tenant queues. Agents receive only queues where their active
+  membership is enabled; Owner, Manager, and Auditor receive the tenant-wide read projection.
+- `POST /api/v1/queues` and `PATCH /api/v1/queues/:queueId` require queue-management permission and
+  use optimistic queue revisions.
+- `GET /api/v1/queues/eligible-members` returns active Agent memberships to Owner and Manager.
+- `POST /api/v1/queues/:queueId/members` adds, enables, or disables an Agent membership. A member
+  with open assigned tickets cannot be disabled until those tickets are reassigned.
+- `POST /api/v1/tickets/:ticketId/queue` places a ticket in an active queue and clears its assignee.
+- `POST /api/v1/tickets/:ticketId/assign` manually assigns an active queue member.
+- `POST /api/v1/tickets/:ticketId/unassign` retains the queue while clearing the assignee.
+- `POST /api/v1/tickets/:ticketId/take-over` lets an Agent assign an accessible queue ticket to its
+  own active membership.
+- `POST /api/v1/tickets/:ticketId/round-robin` locks the queue cursor and deterministically selects
+  the next active Agent member.
+- `GET /api/v1/operations/dashboard` returns SQL-backed open, unassigned, own-ticket, queue, and SLA
+  placeholder totals. `GET /api/v1/operations/agent-workload` returns active-member workloads and
+  accepts an optional `queueId`.
+
+Every assignment write requires `expectedVersion` and advances the ticket revision. The current
+queue/assignee projection, immutable assignment history, business audit entry, and versioned
+`ticket.assignment-changed.v1` outbox message commit in one transaction. A queue-scoped row lock
+serializes round-robin cursor changes. Composite foreign keys prevent cross-tenant queue,
+membership, and ticket relationships; application policy additionally requires an active Agent
+membership in the selected queue.

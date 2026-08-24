@@ -33,8 +33,17 @@ const loginPage = lazyPage(async () => ({
 const workspacePage = lazyPage(async () => ({
   default: (await import("@/pages/WorkspacePage")).WorkspacePage,
 }));
+const workspaceCreateTicketPage = lazyPage(async () => ({
+  default: (await import("@/pages/WorkspaceCreateTicketPage")).WorkspaceCreateTicketPage,
+}));
+const workspaceQueuesPage = lazyPage(async () => ({
+  default: (await import("@/pages/WorkspaceQueuesPage")).WorkspaceQueuesPage,
+}));
 const requesterPortalPage = lazyPage(async () => ({
   default: (await import("@/pages/RequesterPortalPage")).RequesterPortalPage,
+}));
+const requesterCreateTicketPage = lazyPage(async () => ({
+  default: (await import("@/pages/RequesterCreateTicketPage")).RequesterCreateTicketPage,
 }));
 const workspaceTicketPage = lazyPage(async () => ({
   default: (await import("@/pages/WorkspaceTicketPage")).WorkspaceTicketPage,
@@ -44,6 +53,9 @@ const requesterTicketPage = lazyPage(async () => ({
 }));
 const auditWorkspacePage = lazyPage(async () => ({
   default: (await import("@/pages/AuditWorkspacePage")).AuditWorkspacePage,
+}));
+const accountPage = lazyPage(async () => ({
+  default: (await import("@/pages/AccountPage")).AccountPage,
 }));
 
 export const appGuardRegistry = routerKit.createGuardRegistry();
@@ -63,6 +75,18 @@ export const APP_ROUTES = routerKit.createRoutes([
     guards: [AuthenticatedGuard, StaffGuard],
   },
   {
+    id: "workspace-create-ticket",
+    path: "/workspace/tickets/new",
+    page: workspaceCreateTicketPage,
+    guards: [AuthenticatedGuard, StaffGuard],
+  },
+  {
+    id: "workspace-queues",
+    path: "/workspace/queues",
+    page: workspaceQueuesPage,
+    guards: [AuthenticatedGuard, StaffGuard],
+  },
+  {
     id: "workspace-ticket",
     path: "/workspace/tickets/:ticketId",
     page: workspaceTicketPage,
@@ -72,6 +96,12 @@ export const APP_ROUTES = routerKit.createRoutes([
     id: "requester-portal",
     path: "/portal",
     page: requesterPortalPage,
+    guards: [AuthenticatedGuard, RequesterGuard],
+  },
+  {
+    id: "requester-create-ticket",
+    path: "/portal/tickets/new",
+    page: requesterCreateTicketPage,
     guards: [AuthenticatedGuard, RequesterGuard],
   },
   {
@@ -85,5 +115,11 @@ export const APP_ROUTES = routerKit.createRoutes([
     path: "/audit",
     page: auditWorkspacePage,
     guards: [AuthenticatedGuard, AuditorGuard],
+  },
+  {
+    id: "account",
+    path: "/account",
+    page: accountPage,
+    guards: [AuthenticatedGuard],
   },
 ]);

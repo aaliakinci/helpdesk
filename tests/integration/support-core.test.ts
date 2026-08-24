@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { CustomerService } from "../../src/server/modules/support/application/customer.service.js";
 import { TicketCommandService } from "../../src/server/modules/support/application/ticket-command.service.js";
 import { TicketQueryService } from "../../src/server/modules/support/application/ticket-query.service.js";
+import { SupportEventWriter } from "../../src/server/modules/support/application/support-event-writer.service.js";
 import { IdentityService } from "../../src/server/modules/identity/application/identity.service.js";
 import {
   DEMO_EMAILS,
@@ -31,7 +32,11 @@ describe("customer and ticket transaction core", () => {
     config,
   );
   const ticketQueries = new TicketQueryService(prisma);
-  const ticketCommands = new TicketCommandService(prisma, requestContext, ticketQueries);
+  const ticketCommands = new TicketCommandService(
+    prisma,
+    new SupportEventWriter(requestContext),
+    ticketQueries,
+  );
   const customers = new CustomerService(prisma);
   const password = process.env.DEMO_SEED_PASSWORD ?? "";
   const createdTicketIds = new Set<string>();

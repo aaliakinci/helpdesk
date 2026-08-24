@@ -1,167 +1,141 @@
 import { useLilyNavigate } from "@lily_platform/lily_ui/router";
-import { Alert } from "@lily_platform/lily_ui/ui/atoms/Alert";
 import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
 import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useAppTranslation } from "@/i18n";
-import { PublicShell } from "@/shared/components";
 
 import { useAuth } from "../model/authContext";
-import { workspaceLandingPath } from "../model/workspaceLanding";
+import { workspaceNavigationFor, type WorkspacePath } from "../model/workspaceNavigation";
 
 interface SessionFeatureProps {
+  readonly activePath: WorkspacePath;
   readonly children?: ReactNode;
   readonly id: string;
-  readonly mode: "staff" | "requester" | "auditor";
 }
 
-export function SessionFeature({ children, id, mode }: SessionFeatureProps) {
+export function SessionFeature({ activePath, children, id }: SessionFeatureProps) {
   const auth = useAuth();
   const navigate = useLilyNavigate();
   const { changeLocale, locale, t } = useAppTranslation();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
   const session = auth.session;
   if (!session) return null;
 
-  async function perform(action: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setError(false);
-    try {
-      await action();
-    } catch {
-      setError(true);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const navigation = workspaceNavigationFor(
+    session.activeTenant.role,
+    session.activeTenant.permissions,
+  );
+  const mainId = `${id}.main`;
 
   return (
-    <PublicShell
-      id={`${id}.shell`}
-      brand={t("app:brand")}
-      languageLabel={t("app:shell.language")}
-      locale={locale}
-      onLocaleChange={(nextLocale) => void changeLocale(nextLocale)}
-      skipToContentLabel={t("app:shell.skipToContent")}
-    >
-      <Stack id={`${id}.content`} spacing={3}>
-        <Box id={`${id}.heading`}>
-          <Typography
-            id={`${id}.eyebrow`}
-            component="p"
-            variant="overline"
-            sx={{ color: "primary.main" }}
-          >
-            {t(`app:session.${mode}.eyebrow`)}
-          </Typography>
-          <Typography id={`${id}.title`} component="h1" variant="h3">
-            {t(`app:session.${mode}.title`)}
-          </Typography>
-          <Typography
-            id={`${id}.description`}
-            component="p"
-            sx={{ color: "text.secondary", mt: 2 }}
-          >
-            {t(`app:session.${mode}.description`)}
-          </Typography>
-        </Box>
-        {error && (
-          <Alert id={`${id}.error`} severity="error">
-            {t("app:session.actionError")}
-          </Alert>
-        )}
-        <Box
-          id={`${id}.identity`}
-          sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 3 }}
+    <Box id={id} sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <a
+        id={`${id}.skip-link`}
+        className="skip-link"
+        href={`#${mainId}`}
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById(mainId)?.focus();
+        }}
+      >
+        {t("app:shell.skipToContent")}
+      </a>
+      <Box
+        id={`${id}.header`}
+        component="header"
+        sx={{
+          borderBottom: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <Stack
+          id={`${id}.header.content`}
+          direction={{ xs: "column", lg: "row" }}
+          spacing={2}
+          sx={{
+            alignItems: { xs: "stretch", lg: "center" },
+            maxWidth: 1280,
+            mx: "auto",
+            px: { xs: 2, sm: 3 },
+            py: 1.5,
+          }}
         >
-          <Stack id={`${id}.identity.content`} spacing={1}>
-            <Typography id={`${id}.identity.name`} component="h2" variant="h6">
-              {session.user.displayName}
-            </Typography>
-            <Typography id={`${id}.identity.email`} component="p">
-              {session.user.email}
-            </Typography>
-            <Typography id={`${id}.identity.tenant`} component="p">
-              {t("app:session.tenant")}: {session.activeTenant.name}
-            </Typography>
-            <Typography id={`${id}.identity.role`} component="p">
-              {t("app:session.role")}: {session.activeTenant.role}
+          <Box id={`${id}.brand`} sx={{ minWidth: 210 }}>
+            <Typography id={`${id}.brand.name`} component="span" variant="h6">
+              {t("app:brand")}
             </Typography>
             <Typography
-              id={`${id}.identity.permissions`}
-              component="p"
-              sx={{ color: "text.secondary", overflowWrap: "anywhere" }}
+              id={`${id}.brand.tenant`}
+              component="span"
+              variant="body2"
+              sx={{ color: "text.secondary", ml: 1.5 }}
             >
-              {t("app:session.permissions")}: {session.activeTenant.permissions.join(", ")}
+              {session.activeTenant.name}
             </Typography>
+          </Box>
+          <Stack
+            id={`${id}.navigation`}
+            component="nav"
+            aria-label={t("app:navigation.workspace")}
+            direction="row"
+            spacing={0.5}
+            sx={{ flex: 1, flexWrap: "wrap" }}
+          >
+            {navigation.map((item) => (
+              <Button
+                key={item.path}
+                id={`${id}.navigation.${pathId(item.path)}`}
+                size="small"
+                variant={activePath === item.path ? "contained" : "text"}
+                onClick={() => void navigate(item.path)}
+              >
+                {t(item.labelKey)}
+              </Button>
+            ))}
           </Stack>
-        </Box>
-        {session.tenants.length > 1 && (
-          <Stack id={`${id}.tenants`} spacing={1}>
-            <Typography id={`${id}.tenants.title`} component="h2" variant="h6">
-              {t("app:session.switchTenant")}
+          <Stack id={`${id}.locale`} direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+            <Typography id={`${id}.locale.label`} component="span" variant="body2">
+              {t("app:shell.language")}
             </Typography>
-            <Stack
-              id={`${id}.tenants.actions`}
-              direction="row"
-              spacing={1}
-              sx={{ flexWrap: "wrap" }}
+            <Button
+              id={`${id}.locale.tr`}
+              size="small"
+              variant={locale === "tr-TR" ? "contained" : "text"}
+              aria-pressed={locale === "tr-TR"}
+              onClick={() => void changeLocale("tr-TR")}
             >
-              {session.tenants.map((tenant) => (
-                <Button
-                  id={`${id}.tenant.${tenant.slug}`}
-                  key={tenant.id}
-                  disabled={busy || tenant.id === session.activeTenant.id}
-                  variant={tenant.id === session.activeTenant.id ? "contained" : "outlined"}
-                  onClick={() =>
-                    void perform(async () => {
-                      const response = await auth.switchTenant(tenant.id);
-                      if (response.activeTenant)
-                        await navigate(workspaceLandingPath(response.activeTenant.role));
-                    })
-                  }
-                >
-                  {tenant.name}
-                </Button>
-              ))}
-            </Stack>
+              TR
+            </Button>
+            <Button
+              id={`${id}.locale.en`}
+              size="small"
+              variant={locale === "en-US" ? "contained" : "text"}
+              aria-pressed={locale === "en-US"}
+              onClick={() => void changeLocale("en-US")}
+            >
+              EN
+            </Button>
           </Stack>
-        )}
-        {children}
-        <Stack id={`${id}.actions`} direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button
-            id={`${id}.logout`}
-            disabled={busy}
-            variant="outlined"
-            onClick={() =>
-              void perform(async () => {
-                await auth.logout();
-                await navigate("/login");
-              })
-            }
-          >
-            {t("app:session.logout")}
-          </Button>
-          <Button
-            id={`${id}.revoke-all`}
-            disabled={busy}
-            color="error"
-            variant="outlined"
-            onClick={() =>
-              void perform(async () => {
-                await auth.revokeAllSessions();
-                await navigate("/login");
-              })
-            }
-          >
-            {t("app:session.revokeAll")}
-          </Button>
         </Stack>
-      </Stack>
-    </PublicShell>
+      </Box>
+      <Box
+        id={mainId}
+        component="main"
+        tabIndex={-1}
+        sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, sm: 3 }, py: { xs: 4, md: 6 } }}
+      >
+        {children}
+      </Box>
+    </Box>
   );
+}
+
+function pathId(path: WorkspacePath): string {
+  return path.replace(/^\//u, "").replaceAll("/", ".");
 }

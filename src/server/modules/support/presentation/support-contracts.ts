@@ -101,9 +101,20 @@ export function decodeExpectedVersion(body: unknown): number {
 }
 
 export function decodeTicketListQuery(query: Readonly<Record<string, unknown>>): TicketListInput {
-  assertKeys(query, ["page", "pageSize", "priority", "sortBy", "sortDirection", "status"]);
+  assertKeys(query, [
+    "assignment",
+    "page",
+    "pageSize",
+    "priority",
+    "queueId",
+    "sortBy",
+    "sortDirection",
+    "status",
+  ]);
   const status = optionalSingleString(query.status);
   const priority = optionalSingleString(query.priority);
+  const queueId = optionalSingleString(query.queueId);
+  const assignment = optionalSingleString(query.assignment) ?? "ALL";
   const sortBy = optionalSingleString(query.sortBy) ?? "updatedAt";
   const sortDirection = optionalSingleString(query.sortDirection) ?? "desc";
   if (status !== null && !isTicketStatus(status)) {
@@ -118,14 +129,99 @@ export function decodeTicketListQuery(query: Readonly<Record<string, unknown>>):
   if (sortDirection !== "asc" && sortDirection !== "desc") {
     throw new BadRequestException("sortDirection is invalid.");
   }
+  if (!(["ALL", "MINE", "UNASSIGNED"] as const).includes(assignment as never)) {
+    throw new BadRequestException("assignment filter is invalid.");
+  }
   return {
+    assignment: assignment as TicketListInput["assignment"],
     page: optionalPositiveInteger(query.page, "page", 1),
     pageSize: optionalPositiveInteger(query.pageSize, "pageSize", 20, 100),
     priority,
+    queueId: queueId === null ? null : requireUuid(queueId),
     sortBy: sortBy as TicketListInput["sortBy"],
     sortDirection,
     status,
   };
+}
+
+export function decodeCreateQueue(body: unknown): {
+  readonly description: string | null;
+  readonly name: string;
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["description", "name"]);
+  return {
+    description: optionalTrimmedString(value.description, "description", 500),
+    name: requireTrimmedString(value.name, "name", 2, 120),
+  };
+}
+
+export function decodeUpdateQueue(body: unknown): {
+  readonly description: string | null;
+  readonly expectedVersion: number;
+  readonly name: string;
+  readonly status: "ACTIVE" | "DISABLED";
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["description", "expectedVersion", "name", "status"]);
+  if (value.status !== "ACTIVE" && value.status !== "DISABLED") {
+    throw new BadRequestException("status is invalid.");
+  }
+  return {
+    description: optionalTrimmedString(value.description, "description", 500),
+    expectedVersion: requirePositiveInteger(value.expectedVersion, "expectedVersion"),
+    name: requireTrimmedString(value.name, "name", 2, 120),
+    status: value.status,
+  };
+}
+
+export function decodeQueueMemberWrite(body: unknown): {
+  readonly expectedVersion: number;
+  readonly membershipId: string;
+  readonly status: "ACTIVE" | "DISABLED";
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["expectedVersion", "membershipId", "status"]);
+  if (value.status !== "ACTIVE" && value.status !== "DISABLED") {
+    throw new BadRequestException("status is invalid.");
+  }
+  return {
+    expectedVersion: requirePositiveInteger(value.expectedVersion, "expectedVersion"),
+    membershipId: requireUuid(value.membershipId),
+    status: value.status,
+  };
+}
+
+export function decodeQueueAssignmentWrite(body: unknown): {
+  readonly expectedVersion: number;
+  readonly queueId: string;
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["expectedVersion", "queueId"]);
+  return {
+    expectedVersion: requirePositiveInteger(value.expectedVersion, "expectedVersion"),
+    queueId: requireUuid(value.queueId),
+  };
+}
+
+export function decodeManualAssignmentWrite(body: unknown): {
+  readonly assigneeMembershipId: string;
+  readonly expectedVersion: number;
+  readonly queueId: string;
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["assigneeMembershipId", "expectedVersion", "queueId"]);
+  return {
+    assigneeMembershipId: requireUuid(value.assigneeMembershipId),
+    expectedVersion: requirePositiveInteger(value.expectedVersion, "expectedVersion"),
+    queueId: requireUuid(value.queueId),
+  };
+}
+
+export function decodeWorkloadQuery(query: Readonly<Record<string, unknown>>): string | null {
+  assertKeys(query, ["queueId"]);
+  const queueId = optionalSingleString(query.queueId);
+  return queueId === null ? null : requireUuid(queueId);
 }
 
 export function requireUuid(value: unknown): string {
@@ -164,6 +260,11 @@ function requireTrimmedString(
     throw new BadRequestException(`${name} has an invalid length.`);
   }
   return normalized;
+}
+
+function optionalTrimmedString(value: unknown, name: string, maximum: number): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  return requireTrimmedString(value, name, 1, maximum);
 }
 
 function requirePositiveInteger(value: unknown, name: string): number {

@@ -49,12 +49,15 @@ With the complete Compose topology running:
 npm run smoke:services
 npm run smoke:identity
 npm run smoke:support
+npm run smoke:operations
 ```
 
 The identity and support smoke commands require `DEMO_SEED_PASSWORD` and use the running API; they
 never print the password, access token, or refresh cookie. The support smoke covers requester
 creation/reply, staff public/internal replies, status transitions, stale revisions, linked reopen,
-role boundaries, and cross-tenant reads. `verify` is the static and build gate. The GitHub Actions
+role boundaries, and cross-tenant reads. The operations smoke covers queue membership, manual and
+round-robin assignment, Agent take-over, assignment history, dashboard/workload, and tenant
+isolation. `verify` is the static and build gate. The GitHub Actions
 workflow additionally applies migrations, seeds deterministic test identities, and runs the real
 infrastructure integration suite serially because all files share one qualified database.
 

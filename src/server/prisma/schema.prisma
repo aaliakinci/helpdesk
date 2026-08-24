@@ -57,6 +57,24 @@ enum OutboxMessageStatus {
   FAILED
 }
 
+enum QueueStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum QueueMemberStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TicketAssignmentAction {
+  QUEUED
+  ASSIGNED
+  UNASSIGNED
+  TAKEN_OVER
+  ROUND_ROBIN_ASSIGNED
+}
+
 model PlatformMetadata {
   key       String   @id @db.VarChar(100)
   value     String   @db.VarChar(500)
@@ -83,6 +101,7 @@ model User {
   customerHistory     CustomerHistoryEntry[] @relation("CustomerHistoryActor")
   auditEntries        AuditEntry[]           @relation("AuditActor")
   attachments         Attachment[]           @relation("AttachmentCreator")
+  assignmentHistory   TicketAssignment[]     @relation("TicketAssignmentActor")
 
   @@map("users")
 }
@@ -110,6 +129,8 @@ model Tenant {
   attachments         Attachment[]
   auditEntries        AuditEntry[]
   outboxMessages      OutboxMessage[]
+  queues              Queue[]
+  ticketAssignments   TicketAssignment[]
 
   @@map("tenants")
 }
@@ -152,18 +173,23 @@ model CustomerContact {
 }
 
 model TenantMembership {
-  id                String           @id @default(uuid()) @db.Uuid
-  tenantId          String           @map("tenant_id") @db.Uuid
-  userId            String           @map("user_id") @db.Uuid
-  customerContactId String?          @map("customer_contact_id") @db.Uuid
+  id                String                 @id @default(uuid()) @db.Uuid
+  tenantId          String                 @map("tenant_id") @db.Uuid
+  userId            String                 @map("user_id") @db.Uuid
+  customerContactId String?                @map("customer_contact_id") @db.Uuid
   role              TenantRole
-  status            MembershipStatus @default(ACTIVE)
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customerContact   CustomerContact? @relation(fields: [tenantId, customerContactId], references: [tenantId, id], onDelete: Restrict)
+  status            MembershipStatus       @default(ACTIVE)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant            Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerContact   CustomerContact?       @relation(fields: [tenantId, customerContactId], references: [tenantId, id], onDelete: Restrict)
   sessions          UserSession[]
+  queueMemberships  QueueMember[]
+  assignedTickets   Ticket[]               @relation("TicketCurrentAssignee")
+  assignmentFrom    TicketAssignment[]     @relation("TicketAssignmentFromAssignee")
+  assignmentTo      TicketAssignment[]     @relation("TicketAssignmentToAssignee")
+  assignmentCursors QueueAssignmentState[] @relation("QueueAssignmentCursor")
 
   @@unique([tenantId, id], map: "tenant_memberships_tenant_id_id_key")
   @@unique([tenantId, userId], map: "tenant_memberships_tenant_user_key")
@@ -237,31 +263,37 @@ model TenantTicketCounter {
 }
 
 model Ticket {
-  id                   String                @id @default(uuid()) @db.Uuid
-  tenantId             String                @map("tenant_id") @db.Uuid
-  number               Int
-  requesterContactId   String                @map("requester_contact_id") @db.Uuid
-  createdByUserId      String                @map("created_by_user_id") @db.Uuid
-  reopenedFromTicketId String?               @map("reopened_from_ticket_id") @db.Uuid
-  subject              String                @db.VarChar(200)
-  description          String                @db.Text
-  status               TicketStatus          @default(NEW)
-  priority             TicketPriority        @default(NORMAL)
-  version              Int                   @default(1)
-  firstResponseAt      DateTime?             @map("first_response_at") @db.Timestamptz(3)
-  resolvedAt           DateTime?             @map("resolved_at") @db.Timestamptz(3)
-  closedAt             DateTime?             @map("closed_at") @db.Timestamptz(3)
-  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  requesterContact     CustomerContact       @relation(fields: [tenantId, requesterContactId], references: [tenantId, id], onDelete: Restrict)
-  createdBy            User                  @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  reopenedFrom         Ticket?               @relation("TicketReopen", fields: [tenantId, reopenedFromTicketId], references: [tenantId, id], onDelete: Restrict)
-  reopenedTickets      Ticket[]              @relation("TicketReopen")
-  comments             TicketComment[]
-  statusHistory        TicketStatusHistory[]
-  tags                 TicketTag[]
-  attachments          Attachment[]
+  id                          String                @id @default(uuid()) @db.Uuid
+  tenantId                    String                @map("tenant_id") @db.Uuid
+  number                      Int
+  requesterContactId          String                @map("requester_contact_id") @db.Uuid
+  createdByUserId             String                @map("created_by_user_id") @db.Uuid
+  reopenedFromTicketId        String?               @map("reopened_from_ticket_id") @db.Uuid
+  subject                     String                @db.VarChar(200)
+  description                 String                @db.Text
+  status                      TicketStatus          @default(NEW)
+  priority                    TicketPriority        @default(NORMAL)
+  version                     Int                   @default(1)
+  firstResponseAt             DateTime?             @map("first_response_at") @db.Timestamptz(3)
+  resolvedAt                  DateTime?             @map("resolved_at") @db.Timestamptz(3)
+  closedAt                    DateTime?             @map("closed_at") @db.Timestamptz(3)
+  currentQueueId              String?               @map("current_queue_id") @db.Uuid
+  currentAssigneeMembershipId String?               @map("current_assignee_membership_id") @db.Uuid
+  assignedAt                  DateTime?             @map("assigned_at") @db.Timestamptz(3)
+  createdAt                   DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                   DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requesterContact            CustomerContact       @relation(fields: [tenantId, requesterContactId], references: [tenantId, id], onDelete: Restrict)
+  createdBy                   User                  @relation("TicketCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reopenedFrom                Ticket?               @relation("TicketReopen", fields: [tenantId, reopenedFromTicketId], references: [tenantId, id], onDelete: Restrict)
+  reopenedTickets             Ticket[]              @relation("TicketReopen")
+  comments                    TicketComment[]
+  statusHistory               TicketStatusHistory[]
+  tags                        TicketTag[]
+  attachments                 Attachment[]
+  currentQueue                Queue?                @relation("TicketCurrentQueue", fields: [tenantId, currentQueueId], references: [tenantId, id], onDelete: Restrict)
+  currentAssignee             TenantMembership?     @relation("TicketCurrentAssignee", fields: [tenantId, currentAssigneeMembershipId], references: [tenantId, id], onDelete: Restrict)
+  assignmentHistory           TicketAssignment[]
 
   @@unique([tenantId, id], map: "tickets_tenant_id_id_key")
   @@unique([tenantId, number], map: "tickets_tenant_number_key")
@@ -269,7 +301,86 @@ model Ticket {
   @@index([tenantId, status, updatedAt], map: "tickets_tenant_status_updated_idx")
   @@index([tenantId, requesterContactId, updatedAt], map: "tickets_tenant_requester_updated_idx")
   @@index([tenantId, priority, updatedAt], map: "tickets_tenant_priority_updated_idx")
+  @@index([tenantId, currentQueueId, status, updatedAt], map: "tickets_tenant_queue_status_updated_idx")
+  @@index([tenantId, currentAssigneeMembershipId, status, updatedAt], map: "tickets_tenant_assignee_status_updated_idx")
   @@map("tickets")
+}
+
+model Queue {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String                @map("tenant_id") @db.Uuid
+  name            String                @db.VarChar(120)
+  description     String?               @db.VarChar(500)
+  status          QueueStatus           @default(ACTIVE)
+  version         Int                   @default(1)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  members         QueueMember[]
+  assignmentState QueueAssignmentState?
+  currentTickets  Ticket[]              @relation("TicketCurrentQueue")
+  assignmentFrom  TicketAssignment[]    @relation("TicketAssignmentFromQueue")
+  assignmentTo    TicketAssignment[]    @relation("TicketAssignmentToQueue")
+
+  @@unique([tenantId, id], map: "queues_tenant_id_id_key")
+  @@unique([tenantId, name], map: "queues_tenant_name_key")
+  @@index([tenantId, status, name], map: "queues_tenant_status_name_idx")
+  @@map("queues")
+}
+
+model QueueMember {
+  tenantId     String            @map("tenant_id") @db.Uuid
+  queueId      String            @map("queue_id") @db.Uuid
+  membershipId String            @map("membership_id") @db.Uuid
+  status       QueueMemberStatus @default(ACTIVE)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  queue        Queue             @relation(fields: [tenantId, queueId], references: [tenantId, id], onDelete: Cascade)
+  membership   TenantMembership  @relation(fields: [tenantId, membershipId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, queueId, membershipId])
+  @@index([tenantId, membershipId, status], map: "queue_members_tenant_membership_status_idx")
+  @@map("queue_members")
+}
+
+model QueueAssignmentState {
+  tenantId                 String            @map("tenant_id") @db.Uuid
+  queueId                  String            @map("queue_id") @db.Uuid
+  lastAssignedMembershipId String?           @map("last_assigned_membership_id") @db.Uuid
+  version                  Int               @default(0)
+  updatedAt                DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  queue                    Queue             @relation(fields: [tenantId, queueId], references: [tenantId, id], onDelete: Cascade)
+  lastAssignedMembership   TenantMembership? @relation("QueueAssignmentCursor", fields: [tenantId, lastAssignedMembershipId], references: [tenantId, id], onDelete: Restrict)
+
+  @@id([tenantId, queueId])
+  @@map("queue_assignment_states")
+}
+
+model TicketAssignment {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  tenantId                 String                 @map("tenant_id") @db.Uuid
+  ticketId                 String                 @map("ticket_id") @db.Uuid
+  actorUserId              String                 @map("actor_user_id") @db.Uuid
+  action                   TicketAssignmentAction
+  fromQueueId              String?                @map("from_queue_id") @db.Uuid
+  toQueueId                String?                @map("to_queue_id") @db.Uuid
+  fromAssigneeMembershipId String?                @map("from_assignee_membership_id") @db.Uuid
+  toAssigneeMembershipId   String?                @map("to_assignee_membership_id") @db.Uuid
+  version                  Int
+  occurredAt               DateTime               @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  tenant                   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket                   Ticket                 @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  actor                    User                   @relation("TicketAssignmentActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  fromQueue                Queue?                 @relation("TicketAssignmentFromQueue", fields: [tenantId, fromQueueId], references: [tenantId, id], onDelete: Restrict)
+  toQueue                  Queue?                 @relation("TicketAssignmentToQueue", fields: [tenantId, toQueueId], references: [tenantId, id], onDelete: Restrict)
+  fromAssignee             TenantMembership?      @relation("TicketAssignmentFromAssignee", fields: [tenantId, fromAssigneeMembershipId], references: [tenantId, id], onDelete: Restrict)
+  toAssignee               TenantMembership?      @relation("TicketAssignmentToAssignee", fields: [tenantId, toAssigneeMembershipId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, ticketId, version], map: "ticket_assignments_ticket_version_key")
+  @@index([tenantId, ticketId, occurredAt], map: "ticket_assignments_tenant_ticket_occurred_idx")
+  @@index([tenantId, toQueueId, occurredAt], map: "ticket_assignments_tenant_queue_occurred_idx")
+  @@index([tenantId, toAssigneeMembershipId, occurredAt], map: "ticket_assignments_tenant_assignee_occurred_idx")
+  @@map("ticket_assignments")
 }
 
 model TicketComment {

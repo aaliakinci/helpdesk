@@ -17,12 +17,13 @@ A multi-tenant customer support platform for small and medium-sized support team
 - Tenant-scoped ticket creation, pagination, role-projected details, public replies, and internal notes
 - Fixed ticket state machine, first-response timestamp, optimistic concurrency, audit, and durable outbox
 - Atomic per-tenant ticket numbering and linked reopen behavior for closed tickets
-- React, Vite, and Lily UI login/session/ticket application with Turkish and English locales
+- Tenant-scoped queues, active Agent memberships, manual/take-over/round-robin assignment, and immutable assignment history
+- SQL-backed unassigned/my-ticket/queue workload and operational dashboard projections
+- React, Vite, and Lily UI login/session/ticket/queue application with Turkish and English locales
 - Docker Compose development topology and GitHub Actions quality gates
 
 ## Further v1 product scope
 
-- Agent queues and round-robin assignment
 - Outbox publishing and idempotent RabbitMQ consumers
 - In-app notifications and authorized realtime updates
 - Priority-based first-response and resolution SLA tracking
@@ -109,6 +110,8 @@ role boundaries, requester binding, rate limiting, and tenant switching. Demo em
 in [the authentication guide](docs/authentication.md); their local-only password is read from
 `DEMO_SEED_PASSWORD`. `npm run smoke:support` verifies the primary requester and agent ticket flow,
 including internal-note projection, lifecycle, stale revision handling, and linked reopen.
+`npm run smoke:operations` verifies queue management, assignment history, take-over, round-robin,
+dashboard/workload queries, role boundaries, and tenant isolation.
 
 See [the development guide](docs/development.md) for the complete command matrix.
 

@@ -5,7 +5,7 @@ import { useLilyParams } from "@lily_platform/lily_ui/router";
 export function WorkspaceTicketPage({ id }: { readonly id: string }) {
   const { ticketId } = useLilyParams<{ ticketId: string }>();
   return (
-    <SessionFeature id={id} mode="staff">
+    <SessionFeature activePath="/workspace" id={id}>
       <TicketWorkspaceFeature id={`${id}.tickets`} mode="staff" ticketId={ticketId} />
     </SessionFeature>
   );

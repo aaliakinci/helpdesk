@@ -39,11 +39,14 @@ export interface TicketRequester {
 }
 
 export interface TicketSummary {
+  readonly assignedAtUtc: string | null;
+  readonly assignee: AssignmentPerson | null;
   readonly createdAtUtc: string;
   readonly firstResponseAtUtc: string | null;
   readonly id: string;
   readonly number: number;
   readonly priority: TicketPriority;
+  readonly queue: QueueReference | null;
   readonly requester: TicketRequester;
   readonly status: TicketStatus;
   readonly subject: string;
@@ -69,6 +72,7 @@ export interface TicketStatusHistoryView {
 }
 
 export interface TicketDetail extends TicketSummary {
+  readonly assignmentHistory: readonly TicketAssignmentView[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketCommentView[];
   readonly description: string;
@@ -88,10 +92,78 @@ export interface TicketPage {
 }
 
 export interface TicketListInput {
+  readonly assignment: "ALL" | "MINE" | "UNASSIGNED";
   readonly page: number;
   readonly pageSize: number;
   readonly priority: TicketPriority | null;
+  readonly queueId: string | null;
   readonly sortBy: "createdAt" | "number" | "priority" | "updatedAt";
   readonly sortDirection: "asc" | "desc";
   readonly status: TicketStatus | null;
+}
+
+export interface QueueReference {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface AssignmentPerson {
+  readonly displayName: string;
+  readonly membershipId: string;
+}
+
+export interface TicketAssignmentView {
+  readonly action: "QUEUED" | "ASSIGNED" | "UNASSIGNED" | "TAKEN_OVER" | "ROUND_ROBIN_ASSIGNED";
+  readonly actor: { readonly displayName: string; readonly id: string };
+  readonly fromAssignee: AssignmentPerson | null;
+  readonly fromQueue: QueueReference | null;
+  readonly id: string;
+  readonly occurredAtUtc: string;
+  readonly toAssignee: AssignmentPerson | null;
+  readonly toQueue: QueueReference | null;
+  readonly version: number;
+}
+
+export interface QueueMemberView extends AssignmentPerson {
+  readonly email: string;
+  readonly role: string;
+  readonly status: "ACTIVE" | "DISABLED";
+}
+
+export interface QueueView extends QueueReference {
+  readonly activeMemberCount: number;
+  readonly createdAtUtc: string;
+  readonly description: string | null;
+  readonly members: readonly QueueMemberView[];
+  readonly openTicketCount: number;
+  readonly status: "ACTIVE" | "DISABLED";
+  readonly unassignedTicketCount: number;
+  readonly updatedAtUtc: string;
+  readonly version: number;
+}
+
+export interface EligibleQueueMember extends AssignmentPerson {
+  readonly email: string;
+}
+
+export interface OperationsDashboard {
+  readonly myOpenTickets: number;
+  readonly openTickets: number;
+  readonly queues: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly openTickets: number;
+    readonly unassignedTickets: number;
+  }[];
+  readonly sla: {
+    readonly breachedTickets: null;
+    readonly dueSoonTickets: null;
+    readonly status: "NOT_CONFIGURED";
+  };
+  readonly unassignedTickets: number;
+}
+
+export interface AgentWorkloadItem extends AssignmentPerson {
+  readonly assignedOpenTickets: number;
+  readonly queueIds: readonly string[];
 }

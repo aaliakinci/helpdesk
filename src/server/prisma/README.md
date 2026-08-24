@@ -17,4 +17,10 @@ audit entries, and versioned outbox messages. Composite foreign keys keep ticket
 the same tenant, while unique `(tenant_id, number)` and `(tenant_id, ticket_id, version)` constraints
 protect ticket identity and history revisions.
 
+The queue and assignment migration adds queue definitions, active-member state, per-queue
+round-robin cursors, current ticket queue/assignee projections, and immutable assignment history.
+Composite tenant foreign keys prevent queue, membership, ticket, and assignment records from being
+linked across tenants. Dedicated queue/assignee/status indexes support operational list and workload
+queries without Redis correctness dependencies.
+
 Migrations must preserve tenant isolation, same-tenant relationships, durable outbox data, and safe forward deployment.

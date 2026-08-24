@@ -19,11 +19,14 @@ export interface TicketRequester {
 }
 
 export interface TicketSummary {
+  readonly assignedAtUtc: string | null;
+  readonly assignee: AssignmentPerson | null;
   readonly createdAtUtc: string;
   readonly firstResponseAtUtc: string | null;
   readonly id: string;
   readonly number: number;
   readonly priority: TicketPriority;
+  readonly queue: QueueReference | null;
   readonly requester: TicketRequester;
   readonly status: TicketStatus;
   readonly subject: string;
@@ -40,6 +43,7 @@ export interface TicketComment {
 }
 
 export interface TicketDetail extends TicketSummary {
+  readonly assignmentHistory: readonly TicketAssignment[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketComment[];
   readonly description: string;
@@ -55,6 +59,31 @@ export interface TicketDetail extends TicketSummary {
     readonly version: number;
   }[];
   readonly tags: readonly { readonly id: string; readonly name: string }[];
+}
+
+export interface QueueReference {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface AssignmentPerson {
+  readonly displayName: string;
+  readonly membershipId: string;
+}
+
+export type TicketAssignmentAction =
+  "QUEUED" | "ASSIGNED" | "UNASSIGNED" | "TAKEN_OVER" | "ROUND_ROBIN_ASSIGNED";
+
+export interface TicketAssignment {
+  readonly action: TicketAssignmentAction;
+  readonly actor: { readonly displayName: string; readonly id: string };
+  readonly fromAssignee: AssignmentPerson | null;
+  readonly fromQueue: QueueReference | null;
+  readonly id: string;
+  readonly occurredAtUtc: string;
+  readonly toAssignee: AssignmentPerson | null;
+  readonly toQueue: QueueReference | null;
+  readonly version: number;
 }
 
 export interface TicketPage {
@@ -101,6 +130,20 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
   const value = requireRecord(body, "ticket detail");
   return {
     ...decodeTicketSummary(body),
+    assignmentHistory: requireArray(value.assignmentHistory, "assignmentHistory").map((item) => {
+      const assignment = requireRecord(item, "assignment history");
+      return {
+        action: decodeAssignmentAction(assignment.action),
+        actor: decodePerson(assignment.actor),
+        fromAssignee: decodeNullableAssignee(assignment.fromAssignee),
+        fromQueue: decodeNullableQueue(assignment.fromQueue),
+        id: requireString(assignment.id, "assignment.id"),
+        occurredAtUtc: requireString(assignment.occurredAtUtc, "assignment.occurredAtUtc"),
+        toAssignee: decodeNullableAssignee(assignment.toAssignee),
+        toQueue: decodeNullableQueue(assignment.toQueue),
+        version: requireNumber(assignment.version, "assignment.version"),
+      };
+    }),
     closedAtUtc: nullableString(value.closedAtUtc, "closedAtUtc"),
     comments: requireArray(value.comments, "comments").map((item) => {
       const comment = requireRecord(item, "comment");
@@ -156,11 +199,14 @@ function decodeTicketSummary(body: unknown): TicketSummary {
   const value = requireRecord(body, "ticket");
   const requester = requireRecord(value.requester, "ticket.requester");
   return {
+    assignedAtUtc: nullableString(value.assignedAtUtc, "ticket.assignedAtUtc"),
+    assignee: decodeNullableAssignee(value.assignee),
     createdAtUtc: requireString(value.createdAtUtc, "ticket.createdAtUtc"),
     firstResponseAtUtc: nullableString(value.firstResponseAtUtc, "ticket.firstResponseAtUtc"),
     id: requireString(value.id, "ticket.id"),
     number: requireNumber(value.number, "ticket.number"),
     priority: decodePriority(value.priority),
+    queue: decodeNullableQueue(value.queue),
     requester: {
       contactId: requireString(requester.contactId, "requester.contactId"),
       customerId: requireString(requester.customerId, "requester.customerId"),
@@ -172,6 +218,24 @@ function decodeTicketSummary(body: unknown): TicketSummary {
     subject: requireString(value.subject, "ticket.subject"),
     updatedAtUtc: requireString(value.updatedAtUtc, "ticket.updatedAtUtc"),
     version: requireNumber(value.version, "ticket.version"),
+  };
+}
+
+function decodeNullableQueue(value: unknown): QueueReference | null {
+  if (value === null) return null;
+  const queue = requireRecord(value, "queue reference");
+  return {
+    id: requireString(queue.id, "queue.id"),
+    name: requireString(queue.name, "queue.name"),
+  };
+}
+
+function decodeNullableAssignee(value: unknown): AssignmentPerson | null {
+  if (value === null) return null;
+  const assignee = requireRecord(value, "assignee");
+  return {
+    displayName: requireString(assignee.displayName, "assignee.displayName"),
+    membershipId: requireString(assignee.membershipId, "assignee.membershipId"),
   };
 }
 
@@ -210,4 +274,18 @@ function decodeVisibility(value: unknown): TicketCommentVisibility {
     throw new TypeError("comment.visibility is invalid.");
   }
   return value as TicketCommentVisibility;
+}
+
+function decodeAssignmentAction(value: unknown): TicketAssignmentAction {
+  const actions: readonly TicketAssignmentAction[] = [
+    "QUEUED",
+    "ASSIGNED",
+    "UNASSIGNED",
+    "TAKEN_OVER",
+    "ROUND_ROBIN_ASSIGNED",
+  ];
+  if (typeof value !== "string" || !actions.includes(value as TicketAssignmentAction)) {
+    throw new TypeError("assignment.action is invalid.");
+  }
+  return value as TicketAssignmentAction;
 }

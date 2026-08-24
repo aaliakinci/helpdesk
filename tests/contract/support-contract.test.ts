@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   decodeCommentWrite,
+  decodeCreateQueue,
   decodeCreateTicket,
+  decodeManualAssignmentWrite,
+  decodeQueueMemberWrite,
   decodeStatusWrite,
   decodeTicketListQuery,
 } from "../../src/server/modules/support/presentation/support-contracts.js";
@@ -57,13 +60,50 @@ describe("customer and ticket HTTP contracts", () => {
         status: "OPEN",
       }),
     ).toEqual({
+      assignment: "ALL",
       page: 2,
       pageSize: 25,
       priority: "URGENT",
+      queueId: null,
       sortBy: "number",
       sortDirection: "asc",
       status: "OPEN",
     });
     expect(() => decodeTicketListQuery({ pageSize: "101" })).toThrow("allowed range");
+  });
+
+  it("strictly decodes queue and assignment writes without accepting tenant scope", () => {
+    expect(decodeCreateQueue({ description: "  Billing team  ", name: "  Billing  " })).toEqual({
+      description: "Billing team",
+      name: "Billing",
+    });
+    expect(
+      decodeQueueMemberWrite({
+        expectedVersion: 2,
+        membershipId: "00000000-0000-4000-8000-000000000503",
+        status: "ACTIVE",
+      }),
+    ).toEqual({
+      expectedVersion: 2,
+      membershipId: "00000000-0000-4000-8000-000000000503",
+      status: "ACTIVE",
+    });
+    expect(
+      decodeManualAssignmentWrite({
+        assigneeMembershipId: "00000000-0000-4000-8000-000000000503",
+        expectedVersion: 4,
+        queueId: "00000000-0000-4000-8000-000000000703",
+      }),
+    ).toEqual({
+      assigneeMembershipId: "00000000-0000-4000-8000-000000000503",
+      expectedVersion: 4,
+      queueId: "00000000-0000-4000-8000-000000000703",
+    });
+    expect(() =>
+      decodeCreateQueue({
+        name: "Billing",
+        tenantId: "00000000-0000-4000-8000-000000000101",
+      }),
+    ).toThrow("unsupported field");
   });
 });

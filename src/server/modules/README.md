@@ -8,5 +8,7 @@ permissions, active tenant derivation, membership administration, and identity a
 
 `support` owns customer/contact aggregates, customer history, tenant ticket numbering, ticket state
 transitions, optimistic revisions, role-specific ticket projections, comments, status history,
-business audit entries, and durable outbox writes. Customer, ticket command, and ticket query
-providers remain separate so HTTP controllers do not become business-logic boundaries.
+queues, active Agent membership, assignment history, locked round-robin state, SQL operational
+projections, business audit entries, and durable outbox writes. Customer, queue, assignment,
+operations-query, ticket-command, and ticket-query providers remain separate so HTTP controllers do
+not become business-logic boundaries.

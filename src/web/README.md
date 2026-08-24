@@ -14,3 +14,12 @@ The tickets feature provides runtime-decoded list/detail contracts, requester an
 creation, public replies, visually distinct internal notes, authoritative status mutations, linked
 reopen, and server-side pagination. Requester and staff pages share the feature while preserving
 role-specific inputs and projections.
+
+The operations feature runtime-decodes queue, eligible-member, dashboard, and workload contracts.
+The authenticated shell exposes permission-aware header navigation and keeps each workflow on a
+focused route: ticket lists at `/workspace` or `/portal`, creation at
+`/workspace/tickets/new` or `/portal/tickets/new`, queue management at `/workspace/queues`, and
+identity/tenant/session controls at `/account`. Ticket details remain addressable below each role's
+ticket route. Queue management supports creation/status/member changes; ticket details support
+manual assignment, Agent take-over, round-robin assignment, and assignment history. Mutations wait
+for the authoritative API response and preserve stale-revision error handling.

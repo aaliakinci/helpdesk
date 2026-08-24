@@ -4,9 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
 
-import { PrismaService, RequestContextService } from "../../../platform/index.js";
+import { PrismaService } from "../../../platform/index.js";
 import type { Prisma } from "../../../platform/database/generated/client.js";
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
 import { hasPermission } from "../../identity/domain/permissions.js";
@@ -17,13 +16,15 @@ import {
   type TicketStatus,
 } from "../domain/ticket-policy.js";
 import type { TicketDetail } from "./support.types.js";
+import { SupportEventWriter } from "./support-event-writer.service.js";
+import { ticketReadScope } from "./ticket-access.js";
 import { TicketQueryService } from "./ticket-query.service.js";
 
 @Injectable()
 export class TicketCommandService {
   public constructor(
     private readonly prisma: PrismaService,
-    private readonly requestContext: RequestContextService,
+    private readonly events: SupportEventWriter,
     private readonly queries: TicketQueryService,
   ) {}
 
@@ -104,9 +105,11 @@ export class TicketCommandService {
           visibility: input.visibility,
         },
       });
-      await this.writeAuditAndOutbox(transaction, identity, {
+      await this.events.write(transaction, identity, {
         action:
           input.visibility === "INTERNAL" ? "ticket.internal-note.added" : "ticket.reply.added",
+        aggregateId: ticket.id,
+        aggregateType: "ticket",
         eventType: "ticket.comment.added.v1",
         metadata: { commentId: comment.id, visibility: input.visibility },
         payload: {
@@ -116,7 +119,6 @@ export class TicketCommandService {
           version: nextVersion,
           visibility: input.visibility,
         },
-        ticketId: ticket.id,
       });
     });
     return this.queries.getTicket(identity, ticketId);
@@ -160,8 +162,10 @@ export class TicketCommandService {
           version: nextVersion,
         },
       });
-      await this.writeAuditAndOutbox(transaction, identity, {
+      await this.events.write(transaction, identity, {
         action: "ticket.status.changed",
+        aggregateId: ticket.id,
+        aggregateType: "ticket",
         eventType: "ticket.status-changed.v1",
         metadata: { from: ticket.status, to: input.status },
         payload: {
@@ -171,7 +175,6 @@ export class TicketCommandService {
           toStatus: input.status,
           version: nextVersion,
         },
-        ticketId: ticket.id,
       });
     });
     return this.queries.getTicket(identity, ticketId);
@@ -183,8 +186,8 @@ export class TicketCommandService {
     expectedVersion: number,
   ): Promise<TicketDetail> {
     this.assertManage(identity);
-    const source = await this.prisma.ticket.findUnique({
-      where: { tenantId_id: { tenantId: identity.tenantId, id: ticketId } },
+    const source = await this.prisma.ticket.findFirst({
+      where: { AND: [ticketReadScope(identity)], id: ticketId },
     });
     if (!source) throw new NotFoundException("Ticket was not found.");
     if (source.version !== expectedVersion)
@@ -198,8 +201,8 @@ export class TicketCommandService {
 
     try {
       const reopenedId = await this.prisma.$transaction(async (transaction) => {
-        const current = await transaction.ticket.findUnique({
-          where: { tenantId_id: { tenantId: identity.tenantId, id: ticketId } },
+        const current = await transaction.ticket.findFirst({
+          where: { AND: [ticketReadScope(identity)], id: ticketId },
         });
         if (!current) throw new NotFoundException("Ticket was not found.");
         if (current.version !== expectedVersion) {
@@ -260,8 +263,10 @@ export class TicketCommandService {
         version: 1,
       },
     });
-    await this.writeAuditAndOutbox(transaction, identity, {
+    await this.events.write(transaction, identity, {
       action: input.reopenedFromTicketId ? "ticket.reopened" : "ticket.created",
+      aggregateId: ticket.id,
+      aggregateType: "ticket",
       eventType: "ticket.created.v1",
       metadata: input.reopenedFromTicketId
         ? { reopenedFromTicketId: input.reopenedFromTicketId }
@@ -274,7 +279,6 @@ export class TicketCommandService {
         ticketNumber: ticket.number,
         version: ticket.version,
       },
-      ticketId: ticket.id,
     });
     return ticket;
   }
@@ -309,63 +313,12 @@ export class TicketCommandService {
   ) {
     const ticket = await transaction.ticket.findFirst({
       where: {
+        AND: [ticketReadScope(identity)],
         id: ticketId,
-        tenantId: identity.tenantId,
-        ...(identity.role === "REQUESTER"
-          ? {
-              requesterContactId:
-                identity.customerContactId ?? "00000000-0000-0000-0000-000000000000",
-            }
-          : {}),
       },
     });
     if (!ticket) throw new NotFoundException("Ticket was not found.");
     return ticket;
-  }
-
-  private async writeAuditAndOutbox(
-    transaction: Prisma.TransactionClient,
-    identity: AuthenticatedIdentity,
-    input: {
-      readonly action: string;
-      readonly eventType: string;
-      readonly metadata: Readonly<Record<string, Prisma.InputJsonValue>> | null;
-      readonly payload: Readonly<Record<string, Prisma.InputJsonValue>>;
-      readonly ticketId: string;
-    },
-  ): Promise<void> {
-    const messageId = randomUUID();
-    await transaction.auditEntry.create({
-      data: {
-        action: input.action,
-        actorUserId: identity.userId,
-        aggregateId: input.ticketId,
-        aggregateType: "ticket",
-        ...(input.metadata ? { metadata: input.metadata } : {}),
-        tenantId: identity.tenantId,
-      },
-    });
-    await transaction.outboxMessage.create({
-      data: {
-        aggregateId: input.ticketId,
-        aggregateType: "ticket",
-        ...(this.requestContext.traceId ? { causationId: this.requestContext.traceId } : {}),
-        ...(this.requestContext.correlationId
-          ? { correlationId: this.requestContext.correlationId }
-          : {}),
-        eventType: input.eventType,
-        id: messageId,
-        payload: {
-          ...input.payload,
-          messageId,
-          occurredAtUtc: new Date().toISOString(),
-          schemaVersion: 1,
-          tenantId: identity.tenantId,
-        },
-        schemaVersion: 1,
-        tenantId: identity.tenantId,
-      },
-    });
   }
 
   private assertManage(identity: AuthenticatedIdentity): void {

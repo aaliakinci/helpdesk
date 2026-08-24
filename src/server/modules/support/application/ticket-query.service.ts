@@ -1,10 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 
 import { PrismaService } from "../../../platform/index.js";
 import type { Prisma } from "../../../platform/database/generated/client.js";
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
-import { hasPermission } from "../../identity/domain/permissions.js";
 import type { TicketDetail, TicketListInput, TicketPage, TicketSummary } from "./support.types.js";
+import { ticketReadScope } from "./ticket-access.js";
 
 const requesterSelect = {
   customerId: true,
@@ -15,7 +15,10 @@ const requesterSelect = {
 } satisfies Prisma.CustomerContactSelect;
 
 const summarySelect = {
+  assignedAt: true,
   createdAt: true,
+  currentAssignee: { select: { id: true, user: { select: { displayName: true } } } },
+  currentQueue: { select: { id: true, name: true } },
   firstResponseAt: true,
   id: true,
   number: true,
@@ -37,11 +40,18 @@ export class TicketQueryService {
     identity: AuthenticatedIdentity,
     input: TicketListInput,
   ): Promise<TicketPage> {
-    const requesterContactId = this.authorizedRequesterContact(identity);
+    const scope = ticketReadScope(identity);
     const where: Prisma.TicketWhereInput = {
-      tenantId: identity.tenantId,
-      ...(requesterContactId ? { requesterContactId } : {}),
+      AND: [
+        scope,
+        ...(input.assignment === "MINE"
+          ? [{ currentAssigneeMembershipId: identity.membershipId }]
+          : input.assignment === "UNASSIGNED"
+            ? [{ currentAssigneeMembershipId: null }]
+            : []),
+      ],
       ...(input.priority ? { priority: input.priority } : {}),
+      ...(input.queueId ? { currentQueueId: input.queueId } : {}),
       ...(input.status ? { status: input.status } : {}),
     };
     const orderBy: Prisma.TicketOrderByWithRelationInput = {
@@ -58,7 +68,7 @@ export class TicketQueryService {
       }),
     ]);
     return {
-      items: tickets.map(toTicketSummary),
+      items: tickets.map((ticket) => toTicketSummary(ticket, identity.role !== "REQUESTER")),
       page: input.page,
       pageSize: input.pageSize,
       total,
@@ -67,18 +77,36 @@ export class TicketQueryService {
   }
 
   public async getTicket(identity: AuthenticatedIdentity, ticketId: string): Promise<TicketDetail> {
-    const requesterContactId = this.authorizedRequesterContact(identity);
+    const scope = ticketReadScope(identity);
+    const isRequester = identity.role === "REQUESTER";
     const ticket = await this.prisma.ticket.findFirst({
       where: {
+        AND: [scope],
         id: ticketId,
-        tenantId: identity.tenantId,
-        ...(requesterContactId ? { requesterContactId } : {}),
       },
       select: {
         ...summarySelect,
+        assignmentHistory: {
+          orderBy: [{ version: "asc" }, { id: "asc" }],
+          select: {
+            action: true,
+            actor: { select: { displayName: true, id: true } },
+            fromAssignee: {
+              select: { id: true, user: { select: { displayName: true } } },
+            },
+            fromQueue: { select: { id: true, name: true } },
+            id: true,
+            occurredAt: true,
+            toAssignee: {
+              select: { id: true, user: { select: { displayName: true } } },
+            },
+            toQueue: { select: { id: true, name: true } },
+            version: true,
+          },
+        },
         closedAt: true,
         comments: {
-          ...(requesterContactId ? { where: { visibility: "PUBLIC" as const } } : {}),
+          ...(isRequester ? { where: { visibility: "PUBLIC" as const } } : {}),
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
             author: { select: { displayName: true, id: true } },
@@ -112,7 +140,30 @@ export class TicketQueryService {
     if (!ticket) throw new NotFoundException("Ticket was not found.");
 
     return {
-      ...toTicketSummary(ticket),
+      ...toTicketSummary(ticket, !isRequester),
+      assignmentHistory: isRequester
+        ? []
+        : ticket.assignmentHistory.map((entry) => ({
+            action: entry.action,
+            actor: entry.actor,
+            fromAssignee: entry.fromAssignee
+              ? {
+                  displayName: entry.fromAssignee.user.displayName,
+                  membershipId: entry.fromAssignee.id,
+                }
+              : null,
+            fromQueue: entry.fromQueue,
+            id: entry.id,
+            occurredAtUtc: entry.occurredAt.toISOString(),
+            toAssignee: entry.toAssignee
+              ? {
+                  displayName: entry.toAssignee.user.displayName,
+                  membershipId: entry.toAssignee.id,
+                }
+              : null,
+            toQueue: entry.toQueue,
+            version: entry.version,
+          })),
       closedAtUtc: ticket.closedAt?.toISOString() ?? null,
       comments: ticket.comments.map((comment) => ({
         author: comment.author,
@@ -125,7 +176,7 @@ export class TicketQueryService {
       reopenedFrom: ticket.reopenedFrom,
       reopenedTickets: ticket.reopenedTickets,
       resolvedAtUtc: ticket.resolvedAt?.toISOString() ?? null,
-      statusHistory: requesterContactId
+      statusHistory: isRequester
         ? []
         : ticket.statusHistory.map((entry) => ({
             actor: entry.actor,
@@ -138,28 +189,24 @@ export class TicketQueryService {
       tags: ticket.tags.map(({ tag }) => tag),
     };
   }
-
-  private authorizedRequesterContact(identity: AuthenticatedIdentity): string | null {
-    if (identity.role === "REQUESTER") {
-      if (!hasPermission(identity.role, "tickets.read-own") || !identity.customerContactId) {
-        throw new ForbiddenException("The operation is not permitted.");
-      }
-      return identity.customerContactId;
-    }
-    if (!hasPermission(identity.role, "tickets.read")) {
-      throw new ForbiddenException("The operation is not permitted.");
-    }
-    return null;
-  }
 }
 
-function toTicketSummary(ticket: TicketSummaryRecord): TicketSummary {
+function toTicketSummary(ticket: TicketSummaryRecord, includeOperations: boolean): TicketSummary {
   return {
+    assignedAtUtc: includeOperations ? (ticket.assignedAt?.toISOString() ?? null) : null,
+    assignee:
+      includeOperations && ticket.currentAssignee
+        ? {
+            displayName: ticket.currentAssignee.user.displayName,
+            membershipId: ticket.currentAssignee.id,
+          }
+        : null,
     createdAtUtc: ticket.createdAt.toISOString(),
     firstResponseAtUtc: ticket.firstResponseAt?.toISOString() ?? null,
     id: ticket.id,
     number: ticket.number,
     priority: ticket.priority,
+    queue: includeOperations ? ticket.currentQueue : null,
     requester: {
       contactId: ticket.requesterContact.id,
       customerId: ticket.requesterContact.customerId,
