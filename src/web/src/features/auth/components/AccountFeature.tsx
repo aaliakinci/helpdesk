@@ -1,4 +1,3 @@
-import { useLilyNavigate } from "@lily_platform/lily_ui/router";
 import { Alert } from "@lily_platform/lily_ui/ui/atoms/Alert";
 import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
@@ -6,33 +5,16 @@ import { Card } from "@lily_platform/lily_ui/ui/atoms/Card";
 import { Chip } from "@lily_platform/lily_ui/ui/atoms/Chip";
 import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
-import { useState } from "react";
 
 import { useAppTranslation } from "@/i18n";
 
-import { useAuth } from "../model/authContext";
-import { workspaceLandingPath } from "../model/workspaceLanding";
+import { useAccountSession } from "../hooks/useAccountSession";
 
 export function AccountFeature({ id }: { readonly id: string }) {
-  const auth = useAuth();
-  const navigate = useLilyNavigate();
   const { t } = useAppTranslation();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(false);
-  const session = auth.session;
+  const account = useAccountSession();
+  const session = account.session;
   if (!session) return null;
-
-  async function perform(action: () => Promise<void>): Promise<void> {
-    setBusy(true);
-    setError(false);
-    try {
-      await action();
-    } catch {
-      setError(true);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <Stack id={id} spacing={3}>
@@ -44,7 +26,7 @@ export function AccountFeature({ id }: { readonly id: string }) {
           {t("app:account.description")}
         </Typography>
       </Box>
-      {error && (
+      {account.error && (
         <Alert id={`${id}.error`} severity="error">
           {t("app:session.actionError")}
         </Alert>
@@ -95,16 +77,9 @@ export function AccountFeature({ id }: { readonly id: string }) {
                 <Button
                   id={`${id}.tenant.${tenant.slug}`}
                   key={tenant.id}
-                  disabled={busy || tenant.id === session.activeTenant.id}
+                  disabled={account.busy || tenant.id === session.activeTenant.id}
                   variant={tenant.id === session.activeTenant.id ? "contained" : "outlined"}
-                  onClick={() =>
-                    void perform(async () => {
-                      const response = await auth.switchTenant(tenant.id);
-                      if (response.activeTenant) {
-                        await navigate(workspaceLandingPath(response.activeTenant.role));
-                      }
-                    })
-                  }
+                  onClick={() => void account.switchTenant(tenant.id)}
                 >
                   {tenant.name}
                 </Button>
@@ -115,28 +90,18 @@ export function AccountFeature({ id }: { readonly id: string }) {
             <Stack id={`${id}.security.actions`} spacing={1}>
               <Button
                 id={`${id}.logout`}
-                disabled={busy}
+                disabled={account.busy}
                 variant="outlined"
-                onClick={() =>
-                  void perform(async () => {
-                    await auth.logout();
-                    await navigate("/login");
-                  })
-                }
+                onClick={() => void account.logout()}
               >
                 {t("app:session.logout")}
               </Button>
               <Button
                 id={`${id}.revoke-all`}
-                disabled={busy}
+                disabled={account.busy}
                 color="error"
                 variant="outlined"
-                onClick={() =>
-                  void perform(async () => {
-                    await auth.revokeAllSessions();
-                    await navigate("/login");
-                  })
-                }
+                onClick={() => void account.revokeAllSessions()}
               >
                 {t("app:session.revokeAll")}
               </Button>

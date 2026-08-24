@@ -4,12 +4,13 @@ import { Box } from "@lily_platform/lily_ui/ui/atoms/Box";
 import { Button } from "@lily_platform/lily_ui/ui/atoms/Button";
 import { Stack } from "@lily_platform/lily_ui/ui/atoms/Stack";
 import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useAppTranslation } from "@/i18n";
 
 import { useAuth } from "../model/authContext";
 import { workspaceNavigationFor, type WorkspacePath } from "../model/workspaceNavigation";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
 interface SessionFeatureProps {
   readonly activePath: WorkspacePath;
@@ -174,22 +175,6 @@ export function SessionFeature({ activePath, children, id }: SessionFeatureProps
       </Box>
     </Box>
   );
-}
-
-function useOnlineStatus(): boolean {
-  const [online, setOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
-  return online;
 }
 
 function pathId(path: WorkspacePath): string {

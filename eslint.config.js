@@ -89,6 +89,28 @@ export default tseslint.config(
     },
   },
   {
+    files: ["src/web/src/features/*/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "ImportDeclaration[source.value='react'] > ImportSpecifier[imported.name='useEffect']",
+          message: "Feature lifecycle effects belong in a colocated feature hook.",
+        },
+        {
+          selector:
+            "ImportDeclaration[source.value='react'] > ImportSpecifier[imported.name='useLayoutEffect']",
+          message: "Feature lifecycle effects belong in a colocated feature hook.",
+        },
+        {
+          selector: "ImportDeclaration[source.value=/^\\.\\.\\/api\\/.*Api$/]",
+          message: "Feature components must access API operations through a colocated hook.",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/web/src/pages/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
