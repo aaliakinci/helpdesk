@@ -13,7 +13,12 @@ export interface PlatformEnvironment {
   readonly authLoginWindowSeconds: number;
   readonly databaseUrl: string;
   readonly nodeEnvironment: RuntimeEnvironment;
+  readonly outboxBatchSize: number;
+  readonly outboxLeaseSeconds: number;
+  readonly outboxPollIntervalMs: number;
   readonly rabbitMqUrl: string;
+  readonly rabbitMqPrefetch: number;
+  readonly messagingMaxAttempts: number;
   readonly refreshCookieName: string;
   readonly refreshCookieSecure: boolean;
   readonly refreshSessionTtlDays: number;
@@ -64,7 +69,30 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
     ),
     databaseUrl: requireUrl(environment.DATABASE_URL, "DATABASE_URL", ["postgres:", "postgresql:"]),
     nodeEnvironment,
+    messagingMaxAttempts: parseInteger(
+      environment.MESSAGING_MAX_ATTEMPTS,
+      5,
+      "MESSAGING_MAX_ATTEMPTS",
+      1,
+      20,
+    ),
+    outboxBatchSize: parseInteger(environment.OUTBOX_BATCH_SIZE, 25, "OUTBOX_BATCH_SIZE", 1, 200),
+    outboxLeaseSeconds: parseInteger(
+      environment.OUTBOX_LEASE_SECONDS,
+      30,
+      "OUTBOX_LEASE_SECONDS",
+      5,
+      300,
+    ),
+    outboxPollIntervalMs: parseInteger(
+      environment.OUTBOX_POLL_INTERVAL_MS,
+      500,
+      "OUTBOX_POLL_INTERVAL_MS",
+      100,
+      60_000,
+    ),
     rabbitMqUrl: requireUrl(environment.RABBITMQ_URL, "RABBITMQ_URL", ["amqp:", "amqps:"]),
+    rabbitMqPrefetch: parseInteger(environment.RABBITMQ_PREFETCH, 8, "RABBITMQ_PREFETCH", 1, 100),
     refreshCookieName: parseIdentifier(
       environment.REFRESH_COOKIE_NAME,
       "helpdesk_refresh",

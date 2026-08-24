@@ -9,7 +9,9 @@ export { JsonLogger, writeStructuredLog } from "./observability/json-logger.js";
 export { RequestContextMiddleware } from "./observability/request-context.middleware.js";
 export {
   RequestContextService,
+  createTraceparent,
   normalizeRequestId,
+  normalizeTraceparent,
   resolveRequestIdentity,
 } from "./observability/request-context.js";
 export { PlatformModule } from "./platform.module.js";

@@ -8,6 +8,7 @@ const acmeTenantId = "00000000-0000-4000-8000-000000000101";
 const globexTenantId = "00000000-0000-4000-8000-000000000102";
 
 const requester = await login("requester@demo.helpdesk.test", acmeTenantId);
+const agent = await login("agent@demo.helpdesk.test", acmeTenantId);
 const createdResponse = await request("/api/v1/tickets", {
   authorization: `Bearer ${requester.accessToken}`,
   body: {
@@ -21,22 +22,29 @@ const createdResponse = await request("/api/v1/tickets", {
 assert.equal(createdResponse.status, 201);
 const created = await createdResponse.json();
 assert.equal(created.status, "NEW");
-assert.equal(created.version, 1);
 assert.equal(created.comments.length, 0);
+const automaticallyAssigned = await waitForAssignment(created.id, agent.accessToken);
 
 const requesterReplyResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${requester.accessToken}`,
-  body: { body: "This blocks our weekly export.", expectedVersion: 1, visibility: "PUBLIC" },
+  body: {
+    body: "This blocks our weekly export.",
+    expectedVersion: automaticallyAssigned.version,
+    visibility: "PUBLIC",
+  },
   method: "POST",
 });
 assert.equal(requesterReplyResponse.status, 201);
 const requesterReply = await requesterReplyResponse.json();
-assert.equal(requesterReply.version, 2);
+assert.equal(requesterReply.version, automaticallyAssigned.version + 1);
 
-const agent = await login("agent@demo.helpdesk.test", acmeTenantId);
 const internalResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { body: "Check the rendering worker logs.", expectedVersion: 2, visibility: "INTERNAL" },
+  body: {
+    body: "Check the rendering worker logs.",
+    expectedVersion: requesterReply.version,
+    visibility: "INTERNAL",
+  },
   method: "POST",
 });
 assert.equal(internalResponse.status, 201);
@@ -50,7 +58,7 @@ const publicResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${agent.accessToken}`,
   body: {
     body: "We are investigating the report renderer.",
-    expectedVersion: 3,
+    expectedVersion: withInternal.version,
     visibility: "PUBLIC",
   },
   method: "POST",
@@ -61,7 +69,11 @@ assert.ok(withPublic.firstResponseAtUtc);
 
 const staleResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { body: "Stale mutation", expectedVersion: 3, visibility: "PUBLIC" },
+  body: {
+    body: "Stale mutation",
+    expectedVersion: withInternal.version,
+    visibility: "PUBLIC",
+  },
   method: "POST",
 });
 assert.equal(staleResponse.status, 409);
@@ -95,7 +107,7 @@ assert.equal(
 
 const resolvedResponse = await request(`/api/v1/tickets/${created.id}/status`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { expectedVersion: 4, status: "RESOLVED" },
+  body: { expectedVersion: withPublic.version, status: "RESOLVED" },
   method: "PATCH",
 });
 assert.equal(resolvedResponse.status, 200);
@@ -104,7 +116,7 @@ assert.ok(resolved.resolvedAtUtc);
 
 const closedResponse = await request(`/api/v1/tickets/${created.id}/status`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { expectedVersion: 5, status: "CLOSED" },
+  body: { expectedVersion: resolved.version, status: "CLOSED" },
   method: "PATCH",
 });
 assert.equal(closedResponse.status, 200);
@@ -113,14 +125,14 @@ assert.ok(closed.closedAtUtc);
 
 const directOpenResponse = await request(`/api/v1/tickets/${created.id}/status`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { expectedVersion: 6, status: "OPEN" },
+  body: { expectedVersion: closed.version, status: "OPEN" },
   method: "PATCH",
 });
 assert.equal(directOpenResponse.status, 409);
 
 const reopenedResponse = await request(`/api/v1/tickets/${created.id}/reopen`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { expectedVersion: 6 },
+  body: { expectedVersion: closed.version },
   method: "POST",
 });
 assert.equal(reopenedResponse.status, 201);
@@ -164,4 +176,18 @@ function request(path, options = {}) {
     headers,
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
+}
+
+async function waitForAssignment(ticketId, accessToken) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const response = await request(`/api/v1/tickets/${ticketId}`, {
+      authorization: `Bearer ${accessToken}`,
+    });
+    assert.equal(response.status, 200);
+    const ticket = await response.json();
+    if (ticket.queue && ticket.assignee) return ticket;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for automatic ticket assignment.");
 }

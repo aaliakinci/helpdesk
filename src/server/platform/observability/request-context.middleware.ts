@@ -26,6 +26,7 @@ export class RequestContextMiddleware implements NestMiddleware {
 
     response.setHeader("x-request-id", identity.traceId);
     response.setHeader("x-correlation-id", identity.correlationId);
+    response.setHeader("traceparent", identity.traceparent);
     response.once("finish", () => {
       writeStructuredLog("support-api", "info", "http.request.completed", {
         correlationId: identity.correlationId,
@@ -34,10 +35,11 @@ export class RequestContextMiddleware implements NestMiddleware {
         path: stripQuery(request.originalUrl),
         statusCode: response.statusCode,
         traceId: identity.traceId,
+        traceparent: identity.traceparent,
       });
     });
 
-    this.requestContext.run(identity.traceId, identity.correlationId, next);
+    this.requestContext.run(identity.traceId, identity.correlationId, next, identity.traceparent);
   }
 }
 

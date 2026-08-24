@@ -57,6 +57,17 @@ enum OutboxMessageStatus {
   FAILED
 }
 
+enum NotificationDeliveryChannel {
+  IN_APP
+  EMAIL
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+}
+
 enum QueueStatus {
   ACTIVE
   DISABLED
@@ -107,30 +118,33 @@ model User {
 }
 
 model Tenant {
-  id                  String                 @id @default(uuid()) @db.Uuid
-  slug                String                 @unique(map: "tenants_slug_key") @db.VarChar(80)
-  name                String                 @db.VarChar(120)
-  timeZone            String                 @default("Europe/Istanbul") @map("time_zone") @db.VarChar(80)
-  status              TenantStatus           @default(ACTIVE)
-  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships         TenantMembership[]
-  customers           Customer[]
-  contacts            CustomerContact[]
-  sessions            UserSession[]
-  identityAudit       IdentityAuditEntry[]
-  customerHistory     CustomerHistoryEntry[]
-  ticketCounter       TenantTicketCounter?
-  tickets             Ticket[]
-  ticketComments      TicketComment[]
-  ticketStatusHistory TicketStatusHistory[]
-  tags                Tag[]
-  ticketTags          TicketTag[]
-  attachments         Attachment[]
-  auditEntries        AuditEntry[]
-  outboxMessages      OutboxMessage[]
-  queues              Queue[]
-  ticketAssignments   TicketAssignment[]
+  id                     String                 @id @default(uuid()) @db.Uuid
+  slug                   String                 @unique(map: "tenants_slug_key") @db.VarChar(80)
+  name                   String                 @db.VarChar(120)
+  timeZone               String                 @default("Europe/Istanbul") @map("time_zone") @db.VarChar(80)
+  status                 TenantStatus           @default(ACTIVE)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships            TenantMembership[]
+  customers              Customer[]
+  contacts               CustomerContact[]
+  sessions               UserSession[]
+  identityAudit          IdentityAuditEntry[]
+  customerHistory        CustomerHistoryEntry[]
+  ticketCounter          TenantTicketCounter?
+  tickets                Ticket[]
+  ticketComments         TicketComment[]
+  ticketStatusHistory    TicketStatusHistory[]
+  tags                   Tag[]
+  ticketTags             TicketTag[]
+  attachments            Attachment[]
+  auditEntries           AuditEntry[]
+  outboxMessages         OutboxMessage[]
+  consumedMessages       ConsumedMessage[]
+  notifications          Notification[]
+  notificationDeliveries NotificationDelivery[]
+  queues                 Queue[]
+  ticketAssignments      TicketAssignment[]
 
   @@map("tenants")
 }
@@ -190,6 +204,7 @@ model TenantMembership {
   assignmentFrom    TicketAssignment[]     @relation("TicketAssignmentFromAssignee")
   assignmentTo      TicketAssignment[]     @relation("TicketAssignmentToAssignee")
   assignmentCursors QueueAssignmentState[] @relation("QueueAssignmentCursor")
+  notifications     Notification[]
 
   @@unique([tenantId, id], map: "tenant_memberships_tenant_id_id_key")
   @@unique([tenantId, userId], map: "tenant_memberships_tenant_user_key")
@@ -294,6 +309,7 @@ model Ticket {
   currentQueue                Queue?                @relation("TicketCurrentQueue", fields: [tenantId, currentQueueId], references: [tenantId, id], onDelete: Restrict)
   currentAssignee             TenantMembership?     @relation("TicketCurrentAssignee", fields: [tenantId, currentAssigneeMembershipId], references: [tenantId, id], onDelete: Restrict)
   assignmentHistory           TicketAssignment[]
+  notifications               Notification[]
 
   @@unique([tenantId, id], map: "tickets_tenant_id_id_key")
   @@unique([tenantId, number], map: "tickets_tenant_number_key")
@@ -491,15 +507,72 @@ model OutboxMessage {
   payload       Json
   correlationId String?             @map("correlation_id") @db.VarChar(128)
   causationId   String?             @map("causation_id") @db.VarChar(128)
+  traceparent   String?             @db.VarChar(55)
   status        OutboxMessageStatus @default(PENDING)
   attempts      Int                 @default(0)
   availableAt   DateTime            @default(now()) @map("available_at") @db.Timestamptz(3)
+  lockedBy      String?             @map("locked_by") @db.VarChar(100)
+  lockedUntil   DateTime?           @map("locked_until") @db.Timestamptz(3)
   occurredAt    DateTime            @default(now()) @map("occurred_at") @db.Timestamptz(3)
   publishedAt   DateTime?           @map("published_at") @db.Timestamptz(3)
   lastErrorCode String?             @map("last_error_code") @db.VarChar(100)
   tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([status, availableAt, occurredAt], map: "outbox_messages_status_available_idx")
+  @@index([status, availableAt, lockedUntil, occurredAt], map: "outbox_messages_status_available_idx")
   @@index([tenantId, aggregateType, aggregateId, occurredAt], map: "outbox_messages_tenant_aggregate_idx")
   @@map("outbox_messages")
+}
+
+model ConsumedMessage {
+  consumerName String   @map("consumer_name") @db.VarChar(120)
+  messageId    String   @map("message_id") @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  eventType    String   @map("event_type") @db.VarChar(120)
+  consumedAt   DateTime @default(now()) @map("consumed_at") @db.Timestamptz(3)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([consumerName, messageId])
+  @@index([tenantId, consumedAt], map: "consumed_messages_tenant_consumed_idx")
+  @@map("consumed_messages")
+}
+
+model Notification {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  tenantId              String                 @map("tenant_id") @db.Uuid
+  recipientMembershipId String                 @map("recipient_membership_id") @db.Uuid
+  ticketId              String?                @map("ticket_id") @db.Uuid
+  sourceMessageId       String                 @map("source_message_id") @db.Uuid
+  kind                  String                 @db.VarChar(100)
+  payload               Json
+  readAt                DateTime?              @map("read_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipient             TenantMembership       @relation(fields: [tenantId, recipientMembershipId], references: [tenantId, id], onDelete: Cascade)
+  ticket                Ticket?                @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  deliveries            NotificationDelivery[]
+
+  @@unique([tenantId, id], map: "notifications_tenant_id_id_key")
+  @@unique([tenantId, recipientMembershipId, sourceMessageId, kind], map: "notifications_recipient_source_kind_key")
+  @@index([tenantId, recipientMembershipId, readAt, createdAt], map: "notifications_recipient_unread_created_idx")
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id               String                      @id @default(uuid()) @db.Uuid
+  tenantId         String                      @map("tenant_id") @db.Uuid
+  notificationId   String                      @map("notification_id") @db.Uuid
+  channel          NotificationDeliveryChannel
+  status           NotificationDeliveryStatus  @default(PENDING)
+  attempts         Int                         @default(0)
+  deduplicationKey String                      @map("deduplication_key") @db.VarChar(200)
+  deliveredAt      DateTime?                   @map("delivered_at") @db.Timestamptz(3)
+  lastErrorCode    String?                     @map("last_error_code") @db.VarChar(100)
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant           Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notification     Notification                @relation(fields: [tenantId, notificationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, deduplicationKey], map: "notification_deliveries_tenant_dedupe_key")
+  @@index([tenantId, status, createdAt], map: "notification_deliveries_status_created_idx")
+  @@map("notification_deliveries")
 }

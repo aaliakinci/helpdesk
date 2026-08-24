@@ -54,6 +54,18 @@ const ticketResponse = await request("/api/v1/tickets", {
 assert.equal(ticketResponse.status, 201);
 let ticket = await ticketResponse.json();
 
+ticket = await waitForAssignment(ticket.id, owner.accessToken);
+assert.equal(ticket.queue.name, "General Support");
+assert.equal(ticket.assignee.membershipId, agentMembership.membershipId);
+
+const initialUnassignResponse = await request(`/api/v1/tickets/${ticket.id}/unassign`, {
+  authorization: `Bearer ${owner.accessToken}`,
+  body: { expectedVersion: ticket.version },
+  method: "POST",
+});
+assert.equal(initialUnassignResponse.status, 201);
+ticket = await initialUnassignResponse.json();
+
 const queueTicketResponse = await request(`/api/v1/tickets/${ticket.id}/queue`, {
   authorization: `Bearer ${owner.accessToken}`,
   body: { expectedVersion: ticket.version, queueId: queue.id },
@@ -98,7 +110,14 @@ ticket = await roundRobinResponse.json();
 assert.equal(ticket.assignee.membershipId, agentMembership.membershipId);
 assert.deepEqual(
   ticket.assignmentHistory.map((entry) => entry.action),
-  ["QUEUED", "TAKEN_OVER", "UNASSIGNED", "ROUND_ROBIN_ASSIGNED"],
+  [
+    "ROUND_ROBIN_ASSIGNED",
+    "UNASSIGNED",
+    "QUEUED",
+    "TAKEN_OVER",
+    "UNASSIGNED",
+    "ROUND_ROBIN_ASSIGNED",
+  ],
 );
 
 const filteredResponse = await request(
@@ -171,4 +190,18 @@ function request(path, options = {}) {
     headers,
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
+}
+
+async function waitForAssignment(ticketId, accessToken) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const response = await request(`/api/v1/tickets/${ticketId}`, {
+      authorization: `Bearer ${accessToken}`,
+    });
+    assert.equal(response.status, 200);
+    const ticket = await response.json();
+    if (ticket.queue && ticket.assignee) return ticket;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for automatic ticket assignment.");
 }

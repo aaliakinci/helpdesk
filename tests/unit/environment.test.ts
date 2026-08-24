@@ -19,6 +19,11 @@ describe("parseEnvironment", () => {
       apiPort: 8080,
       appVersion: "0.0.0",
       nodeEnvironment: "development",
+      messagingMaxAttempts: 5,
+      outboxBatchSize: 25,
+      outboxLeaseSeconds: 30,
+      outboxPollIntervalMs: 500,
+      rabbitMqPrefetch: 8,
       workerHealthPort: 8081,
     });
     expect(result.databaseUrl).toBe(validEnvironment.DATABASE_URL);

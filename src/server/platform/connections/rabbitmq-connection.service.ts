@@ -1,5 +1,5 @@
 import { Injectable, type BeforeApplicationShutdown, type OnModuleInit } from "@nestjs/common";
-import { connect, type ChannelModel } from "amqplib";
+import { connect, type Channel, type ChannelModel, type ConfirmChannel } from "amqplib";
 
 import { PlatformConfigService } from "../config/environment.js";
 import { writeStructuredLog } from "../observability/json-logger.js";
@@ -32,6 +32,14 @@ export class RabbitMqConnectionService implements OnModuleInit, BeforeApplicatio
     const connection = await this.ensureConnected();
     const channel = await connection.createChannel();
     await channel.close();
+  }
+
+  public async createChannel(): Promise<Channel> {
+    return (await this.ensureConnected()).createChannel();
+  }
+
+  public async createConfirmChannel(): Promise<ConfirmChannel> {
+    return (await this.ensureConnected()).createConfirmChannel();
   }
 
   private async ensureConnected(): Promise<ChannelModel> {

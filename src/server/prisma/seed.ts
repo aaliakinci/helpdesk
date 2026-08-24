@@ -13,6 +13,7 @@ import { PrismaClient } from "../platform/database/generated/client.js";
 
 const customerId = "00000000-0000-4000-8000-000000000301";
 const requesterContactId = "00000000-0000-4000-8000-000000000401";
+const generalSupportQueueId = "00000000-0000-4000-8000-000000000501";
 
 async function seed(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -207,6 +208,49 @@ async function seed(): Promise<void> {
           },
         });
       }
+
+      await transaction.queue.upsert({
+        where: { id: generalSupportQueueId },
+        create: {
+          assignmentState: { create: {} },
+          description: "Default queue for incoming demo tickets.",
+          id: generalSupportQueueId,
+          name: "General Support",
+          status: "ACTIVE",
+          tenantId: DEMO_TENANTS.acme,
+        },
+        update: {
+          description: "Default queue for incoming demo tickets.",
+          name: "General Support",
+          status: "ACTIVE",
+        },
+      });
+      await transaction.queueAssignmentState.upsert({
+        where: {
+          tenantId_queueId: {
+            queueId: generalSupportQueueId,
+            tenantId: DEMO_TENANTS.acme,
+          },
+        },
+        create: { queueId: generalSupportQueueId, tenantId: DEMO_TENANTS.acme },
+        update: {},
+      });
+      await transaction.queueMember.upsert({
+        where: {
+          tenantId_queueId_membershipId: {
+            membershipId: DEMO_MEMBERSHIPS.acmeAgent,
+            queueId: generalSupportQueueId,
+            tenantId: DEMO_TENANTS.acme,
+          },
+        },
+        create: {
+          membershipId: DEMO_MEMBERSHIPS.acmeAgent,
+          queueId: generalSupportQueueId,
+          status: "ACTIVE",
+          tenantId: DEMO_TENANTS.acme,
+        },
+        update: { status: "ACTIVE" },
+      });
     });
   } finally {
     await prisma.$disconnect();

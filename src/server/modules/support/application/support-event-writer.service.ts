@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 
 import { RequestContextService } from "../../../platform/index.js";
 import type { Prisma } from "../../../platform/database/generated/client.js";
-import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
+
+interface SupportEventActor {
+  readonly tenantId: string;
+  readonly userId: string;
+}
 
 @Injectable()
 export class SupportEventWriter {
@@ -11,7 +15,7 @@ export class SupportEventWriter {
 
   public async write(
     transaction: Prisma.TransactionClient,
-    identity: AuthenticatedIdentity,
+    identity: SupportEventActor,
     input: {
       readonly action: string;
       readonly aggregateId: string;
@@ -40,6 +44,9 @@ export class SupportEventWriter {
         ...(this.requestContext.traceId ? { causationId: this.requestContext.traceId } : {}),
         ...(this.requestContext.correlationId
           ? { correlationId: this.requestContext.correlationId }
+          : {}),
+        ...(this.requestContext.traceparent
+          ? { traceparent: this.requestContext.traceparent }
           : {}),
         eventType: input.eventType,
         id: messageId,

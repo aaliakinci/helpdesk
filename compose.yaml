@@ -63,7 +63,12 @@ services:
       AUTH_LOGIN_WINDOW_SECONDS: ${AUTH_LOGIN_WINDOW_SECONDS:-60}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       NODE_ENV: development
+      MESSAGING_MAX_ATTEMPTS: ${MESSAGING_MAX_ATTEMPTS:-5}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-25}
+      OUTBOX_LEASE_SECONDS: ${OUTBOX_LEASE_SECONDS:-30}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-500}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST}
+      RABBITMQ_PREFETCH: ${RABBITMQ_PREFETCH:-8}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-helpdesk_refresh}
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
       REFRESH_SESSION_TTL_DAYS: ${REFRESH_SESSION_TTL_DAYS:-7}
@@ -128,7 +133,7 @@ services:
       <<: *application-environment
       WORKER_HEALTH_PORT: 8081
     depends_on:
-      migrate:
+      seed:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
