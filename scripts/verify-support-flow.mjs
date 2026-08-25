@@ -25,6 +25,29 @@ assert.equal(created.status, "NEW");
 assert.equal(created.comments.length, 0);
 const automaticallyAssigned = await waitForAssignment(created.id, agent.accessToken);
 
+const attachmentContent = "Requester attachment smoke evidence";
+const attachmentForm = new FormData();
+attachmentForm.set(
+  "file",
+  new Blob([attachmentContent], { type: "text/plain" }),
+  "support-smoke.txt",
+);
+attachmentForm.set("visibility", "PUBLIC");
+const attachmentResponse = await fetch(`${apiUrl}/api/v1/tickets/${created.id}/attachments`, {
+  body: attachmentForm,
+  headers: { Accept: "application/json", Authorization: `Bearer ${requester.accessToken}` },
+  method: "POST",
+});
+assert.equal(attachmentResponse.status, 201);
+const attachment = await attachmentResponse.json();
+assert.equal(attachment.fileName, "support-smoke.txt");
+assert.equal(attachment.visibility, "PUBLIC");
+const attachmentDownload = await fetch(`${apiUrl}/api/v1/attachments/${attachment.id}`, {
+  headers: { Authorization: `Bearer ${requester.accessToken}` },
+});
+assert.equal(attachmentDownload.status, 200);
+assert.equal(await attachmentDownload.text(), attachmentContent);
+
 const requesterReplyResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${requester.accessToken}`,
   body: {
@@ -67,6 +90,17 @@ assert.equal(publicResponse.status, 201);
 const withPublic = await publicResponse.json();
 assert.ok(withPublic.firstResponseAtUtc);
 
+const priorityResponse = await request(`/api/v1/tickets/${created.id}/priority`, {
+  authorization: `Bearer ${agent.accessToken}`,
+  body: { expectedVersion: withPublic.version, priority: "LOW" },
+  method: "PATCH",
+});
+assert.equal(priorityResponse.status, 200);
+const priorityChanged = await priorityResponse.json();
+assert.equal(priorityChanged.priority, "LOW");
+assert.equal(priorityChanged.priorityHistory.at(-1)?.fromPriority, "HIGH");
+assert.equal(priorityChanged.priorityHistory.at(-1)?.toPriority, "LOW");
+
 const staleResponse = await request(`/api/v1/tickets/${created.id}/comments`, {
   authorization: `Bearer ${agent.accessToken}`,
   body: {
@@ -83,6 +117,11 @@ const requesterDetailResponse = await request(`/api/v1/tickets/${created.id}`, {
 });
 assert.equal(requesterDetailResponse.status, 200);
 const requesterDetail = await requesterDetailResponse.json();
+assert.equal(Object.hasOwn(requesterDetail, "priorityHistory"), false);
+assert.equal(
+  requesterDetail.attachments.some((item) => item.id === attachment.id),
+  true,
+);
 assert.equal(
   requesterDetail.comments.every((comment) => comment.visibility === "PUBLIC"),
   true,
@@ -107,7 +146,7 @@ assert.equal(
 
 const resolvedResponse = await request(`/api/v1/tickets/${created.id}/status`, {
   authorization: `Bearer ${agent.accessToken}`,
-  body: { expectedVersion: withPublic.version, status: "RESOLVED" },
+  body: { expectedVersion: priorityChanged.version, status: "RESOLVED" },
   method: "PATCH",
 });
 assert.equal(resolvedResponse.status, 200);
@@ -155,7 +194,7 @@ const crossTenant = await request(`/api/v1/tickets/${created.id}`, {
 assert.equal(crossTenant.status, 404);
 
 process.stdout.write(
-  "Ticket create/list/detail, requester projection, public/internal replies, optimistic conflict, lifecycle, linked reopen, RBAC, and tenant isolation smoke checks passed.\n",
+  "Ticket create/list/detail, requester attachment upload/download, staff-only priority history, requester projection, public/internal replies, optimistic conflict, lifecycle, linked reopen, RBAC, and tenant isolation smoke checks passed.\n",
 );
 
 async function login(email, tenantId) {

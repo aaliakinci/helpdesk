@@ -26,12 +26,23 @@ RUN npm run build
 FROM base AS server-runtime
 
 COPY --chown=node:node package.json package-lock.json ./
-COPY --chown=node:node src/server/apps/support-api/package.json src/server/apps/support-api/package.json
-COPY --chown=node:node src/server/apps/support-worker/package.json src/server/apps/support-worker/package.json
-COPY --chown=node:node src/web/package.json src/web/package.json
 USER node
-RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --ignore-scripts
+RUN npm ci --omit=dev --omit=peer --legacy-peer-deps --ignore-scripts --workspaces=false
 COPY --from=build --chown=node:node /workspace/dist ./dist
+
+# Runtime processes execute compiled Node.js only. Package managers are build-time tooling and
+# retaining their dependency trees would unnecessarily enlarge the production attack surface.
+USER root
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/lib/node_modules/corepack \
+    /opt/yarn-v1.22.22 \
+    && rm -f /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/corepack \
+    /usr/local/bin/yarn \
+    /usr/local/bin/yarnpkg
+RUN install --directory --owner=node --group=node --mode=0700 /var/lib/helpdesk/attachments
+USER node
 
 FROM server-runtime AS support-api
 EXPOSE 8080

@@ -45,6 +45,23 @@ describe("realtime invalidation projection", () => {
     expect(projection).toMatchObject({ requesterVisible: false });
   });
 
+  it("keeps internal attachment metadata out of requester audiences", () => {
+    const projection = projectRealtimeEvent(
+      envelope("ticket.attachment-added.v1", {
+        attachmentId: "00000000-0000-4000-8000-000000000801",
+        ticketId: TICKET_ID,
+        version: 3,
+        visibility: "INTERNAL",
+      }),
+    );
+
+    expect(projection).toMatchObject({
+      invalidation: { ticketId: TICKET_ID, type: "ticket.attachment_added", version: 3 },
+      requesterVisible: false,
+    });
+    expect(projection?.invalidation).not.toHaveProperty("attachmentId");
+  });
+
   it("ignores integration events that have no browser invalidation contract", () => {
     expect(projectRealtimeEvent(envelope("queue.updated.v1", {}))).toBeNull();
   });

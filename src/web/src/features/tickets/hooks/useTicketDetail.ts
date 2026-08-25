@@ -9,6 +9,7 @@ import { useRealtime } from "@/features/realtime";
 import {
   addTicketComment,
   assignTicket,
+  changeTicketPriority,
   changeTicketStatus,
   getTicket,
   reopenTicket,
@@ -17,7 +18,7 @@ import {
   takeOverTicket,
   unassignTicket,
 } from "../api/ticketApi";
-import type { TicketDetail, TicketStatus } from "../api/ticketContract";
+import type { TicketDetail, TicketPriority, TicketStatus } from "../api/ticketContract";
 import type { ReplyFormValues } from "../model/ticketForms";
 import { toTicketUiError, type TicketMode, type TicketUiError } from "../model/ticketPresentation";
 
@@ -42,6 +43,8 @@ export function useTicketDetail({
   const basePath = mode === "requester" ? "/portal" : "/workspace";
   const role = auth.session?.activeTenant?.role;
   const canManageAssignments = role === "OWNER" || role === "MANAGER";
+  const canManageTicket =
+    auth.session?.activeTenant.permissions.includes("tickets.manage") ?? false;
   const canTakeOver = role === "AGENT";
   const timeZone = auth.session?.activeTenant.timeZone ?? "UTC";
 
@@ -94,6 +97,7 @@ export function useTicketDetail({
     basePath,
     busy,
     canManageAssignments,
+    canManageTicket,
     canTakeOver,
     detail,
     error,
@@ -118,6 +122,12 @@ export function useTicketDetail({
       detail
         ? perform(() =>
             setTicketQueue(detail.id, { expectedVersion: detail.version, queueId }),
+          ).then(() => undefined)
+        : Promise.resolve(),
+    changePriority: (priority: TicketPriority) =>
+      detail
+        ? perform(() =>
+            changeTicketPriority(detail.id, { expectedVersion: detail.version, priority }),
           ).then(() => undefined)
         : Promise.resolve(),
     changeStatus: (status: TicketStatus) =>

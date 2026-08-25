@@ -11,6 +11,7 @@ import {
 
 const environment = parseEnvironment({
   ACCESS_TOKEN_SECRET: "unit-test-access-token-secret-at-least-32-bytes",
+  ATTACHMENT_STORAGE_DRIVER: "local",
   DATABASE_URL: "postgresql://helpdesk:secret@127.0.0.1:5432/helpdesk",
   NODE_ENV: "production",
   RABBITMQ_URL: "amqp://helpdesk:secret@127.0.0.1:5672/helpdesk",

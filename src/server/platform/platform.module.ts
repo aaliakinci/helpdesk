@@ -8,6 +8,8 @@ import { PrismaService } from "./database/prisma.service.js";
 import { HealthService } from "./health/health.service.js";
 import { RequestContextMiddleware } from "./observability/request-context.middleware.js";
 import { RequestContextService } from "./observability/request-context.js";
+import { HttpRateLimitMiddleware } from "./security/http-rate-limit.middleware.js";
+import { SecurityHeadersMiddleware } from "./security/security-headers.middleware.js";
 
 const providers = [
   PlatformConfigService,
@@ -18,6 +20,8 @@ const providers = [
   HealthService,
   RequestContextService,
   RequestContextMiddleware,
+  HttpRateLimitMiddleware,
+  SecurityHeadersMiddleware,
 ] as const;
 
 @Module({

@@ -21,6 +21,14 @@ async function bootstrap(): Promise<void> {
     logger,
   });
   const config = app.get(PlatformConfigService);
+  const express = app.getHttpAdapter().getInstance() as { set(name: string, value: number): void };
+  express.set("trust proxy", config.values.trustedProxyHops);
+  const httpServer = app.getHttpServer() as {
+    headersTimeout: number;
+    requestTimeout: number;
+  };
+  httpServer.requestTimeout = config.values.uploadTimeoutMs;
+  httpServer.headersTimeout = config.values.uploadTimeoutMs + 5_000;
   const realtimeAdapter = new RedisIoAdapter(app, config);
   await realtimeAdapter.connectToRedis();
   app.useWebSocketAdapter(realtimeAdapter);

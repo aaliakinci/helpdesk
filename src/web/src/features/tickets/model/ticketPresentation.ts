@@ -5,7 +5,7 @@ import type { TicketStatus } from "../api/ticketContract";
 export type TicketMode = "requester" | "staff";
 
 export interface TicketUiError {
-  readonly kind: "conflict" | "forbidden" | "network" | "validation" | "unknown";
+  readonly kind: "conflict" | "forbidden" | "network" | "unavailable" | "validation" | "unknown";
   readonly message: string;
   readonly traceId: string | null;
 }
@@ -29,7 +29,7 @@ export function formatTicketDate(value: string, locale: string, timeZone: string
 export function toTicketUiError(
   cause: unknown,
   t: (key: string) => string,
-  operation: "action" | "load",
+  operation: "action" | "attachment" | "load",
 ): TicketUiError {
   const error = normalizeError(cause);
   const traceId = cause instanceof LilyApiError ? (cause.traceId ?? null) : null;
@@ -47,6 +47,13 @@ export function toTicketUiError(
   }
   if (error.statusCode === 400 || error.statusCode === 422) {
     return { kind: "validation", message: t("app:tickets.errors.validation"), traceId };
+  }
+  if (error.statusCode === 503 && operation === "attachment") {
+    return {
+      kind: "unavailable",
+      message: t("app:tickets.attachments.unavailable"),
+      traceId,
+    };
   }
   return {
     kind: "unknown",

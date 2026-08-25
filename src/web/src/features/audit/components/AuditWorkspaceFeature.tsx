@@ -7,12 +7,13 @@ import { Typography } from "@lily_platform/lily_ui/ui/atoms/Typography";
 
 import { useAppTranslation } from "@/i18n";
 
-import { useReadOnlyMemberships } from "../hooks/useReadOnlyMemberships";
-import { AuditMembershipTable } from "./AuditMembershipTable";
+import { useAuditLog } from "../hooks/useAuditLog";
+import { AuditFilters } from "./AuditFilters";
+import { AuditLogTable } from "./AuditLogTable";
 
 export function AuditWorkspaceFeature({ id }: { readonly id: string }) {
   const { t } = useAppTranslation();
-  const memberships = useReadOnlyMemberships();
+  const log = useAuditLog();
 
   return (
     <Stack id={id} spacing={3}>
@@ -38,23 +39,20 @@ export function AuditWorkspaceFeature({ id }: { readonly id: string }) {
           <Chip id={`${id}.read-only`} variant="outlined" label={t("app:audit.readOnly")} />
         </Stack>
       </Box>
-      {memberships.failed && (
+      <AuditFilters id={id} log={log} />
+      {log.failed && (
         <Alert id={`${id}.error`} severity="error">
           <Stack id={`${id}.error.content`} spacing={1}>
             <Typography id={`${id}.error.message`} component="p">
               {t("app:audit.loadError")}
             </Typography>
-            <Button id={`${id}.error.retry`} variant="outlined" onClick={memberships.reload}>
+            <Button id={`${id}.error.retry`} variant="outlined" onClick={log.reload}>
               {t("app:audit.retry")}
             </Button>
           </Stack>
         </Alert>
       )}
-      <AuditMembershipTable
-        id={`${id}.memberships`}
-        loading={memberships.loading}
-        memberships={memberships.memberships}
-      />
+      <AuditLogTable id={`${id}.entries`} log={log} />
     </Stack>
   );
 }

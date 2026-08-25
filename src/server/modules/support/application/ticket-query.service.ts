@@ -3,7 +3,13 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../../platform/index.js";
 import type { Prisma } from "../../../platform/database/generated/client.js";
 import type { AuthenticatedIdentity } from "../../identity/domain/identity.types.js";
-import type { TicketDetail, TicketListInput, TicketPage, TicketSummary } from "./support.types.js";
+import type {
+  TicketDetail,
+  TicketListInput,
+  TicketPage,
+  TicketPriorityHistoryView,
+  TicketSummary,
+} from "./support.types.js";
 import { ticketReadScope } from "./ticket-access.js";
 
 const requesterSelect = {
@@ -32,6 +38,18 @@ const summarySelect = {
 
 type TicketSummaryRecord = Prisma.TicketGetPayload<{ select: typeof summarySelect }>;
 
+const priorityHistorySelect = {
+  actor: { select: { displayName: true, id: true } },
+  actorType: true,
+  id: true,
+  metadata: true,
+  occurredAt: true,
+} satisfies Prisma.AuditEntrySelect;
+
+type TicketPriorityHistoryRecord = Prisma.AuditEntryGetPayload<{
+  select: typeof priorityHistorySelect;
+}>;
+
 @Injectable()
 export class TicketQueryService {
   public constructor(private readonly prisma: PrismaService) {}
@@ -56,6 +74,13 @@ export class TicketQueryService {
                 OR: [
                   { subject: { contains: input.search, mode: "insensitive" as const } },
                   { description: { contains: input.search, mode: "insensitive" as const } },
+                  {
+                    tags: {
+                      some: {
+                        tag: { name: { contains: input.search, mode: "insensitive" as const } },
+                      },
+                    },
+                  },
                   {
                     requesterContact: {
                       is: {
@@ -117,6 +142,20 @@ export class TicketQueryService {
       },
       select: {
         ...summarySelect,
+        attachments: {
+          ...(isRequester ? { where: { visibility: "PUBLIC" as const } } : {}),
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          select: {
+            byteSize: true,
+            commentId: true,
+            contentType: true,
+            createdAt: true,
+            createdBy: { select: { displayName: true, id: true } },
+            fileName: true,
+            id: true,
+            visibility: true,
+          },
+        },
         assignmentHistory: {
           orderBy: [{ version: "asc" }, { id: "asc" }],
           select: {
@@ -187,9 +226,36 @@ export class TicketQueryService {
       },
     });
     if (!ticket) throw new NotFoundException("Ticket was not found.");
+    const priorityHistory = isRequester
+      ? []
+      : (
+          await this.prisma.auditEntry.findMany({
+            orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+            select: priorityHistorySelect,
+            where: {
+              action: "ticket.priority.changed",
+              aggregateId: ticket.id,
+              aggregateType: "ticket",
+              tenantId: identity.tenantId,
+            },
+          })
+        ).flatMap((entry) => {
+          const view = toTicketPriorityHistory(entry);
+          return view ? [view] : [];
+        });
 
     return {
       ...toTicketSummary(ticket, !isRequester),
+      attachments: ticket.attachments.map((attachment) => ({
+        byteSize: Number(attachment.byteSize),
+        commentId: attachment.commentId,
+        contentType: attachment.contentType,
+        createdAtUtc: attachment.createdAt.toISOString(),
+        createdBy: attachment.createdBy,
+        fileName: attachment.fileName,
+        id: attachment.id,
+        visibility: attachment.visibility,
+      })),
       ...(!isRequester
         ? {
             assignmentHistory: ticket.assignmentHistory.map((entry) => ({
@@ -213,6 +279,7 @@ export class TicketQueryService {
               toQueue: entry.toQueue,
               version: entry.version,
             })),
+            priorityHistory,
             statusHistory: ticket.statusHistory.map((entry) => ({
               actor: {
                 displayName: entry.actor?.displayName ?? null,
@@ -270,6 +337,31 @@ export class TicketQueryService {
       tags: ticket.tags.map(({ tag }) => tag),
     };
   }
+}
+
+function toTicketPriorityHistory(
+  entry: TicketPriorityHistoryRecord,
+): TicketPriorityHistoryView | null {
+  const metadata = entry.metadata;
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const fromPriority = metadata.from;
+  const toPriority = metadata.to;
+  if (!isTicketPriority(fromPriority) || !isTicketPriority(toPriority)) return null;
+  return {
+    actor: {
+      displayName: entry.actor?.displayName ?? null,
+      id: entry.actor?.id ?? null,
+      type: entry.actorType,
+    },
+    fromPriority,
+    id: entry.id,
+    occurredAtUtc: entry.occurredAt.toISOString(),
+    toPriority,
+  };
+}
+
+function isTicketPriority(value: unknown): value is TicketPriorityHistoryView["fromPriority"] {
+  return value === "LOW" || value === "NORMAL" || value === "HIGH" || value === "URGENT";
 }
 
 function toTicketSummary(ticket: TicketSummaryRecord, includeOperations: boolean): TicketSummary {

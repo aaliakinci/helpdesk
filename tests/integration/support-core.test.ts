@@ -43,6 +43,7 @@ describe("customer and ticket transaction core", () => {
   const password = process.env.DEMO_SEED_PASSWORD ?? "";
   const createdTicketIds = new Set<string>();
   const createdCustomerIds = new Set<string>();
+  const createdTagIds = new Set<string>();
   let initialCounters: Readonly<Record<string, number | null>> | null = null;
   let agent: AuthenticatedIdentity;
   let owner: AuthenticatedIdentity;
@@ -78,6 +79,9 @@ describe("customer and ticket transaction core", () => {
     }
     if (createdCustomerIds.size > 0) {
       await prisma.customer.deleteMany({ where: { id: { in: [...createdCustomerIds] } } });
+    }
+    if (createdTagIds.size > 0) {
+      await prisma.tag.deleteMany({ where: { id: { in: [...createdTagIds] } } });
     }
     if (initialCounters) {
       for (const [tenantId, lastNumber] of Object.entries(initialCounters)) {
@@ -146,6 +150,27 @@ describe("customer and ticket transaction core", () => {
       schemaVersion: 1,
       status: "PENDING",
     });
+  });
+
+  it("projects priority history to staff without exposing audit activity to requesters", async () => {
+    const created = await createRequesterTicket(`priority-${randomUUID()}`);
+    const changed = await ticketCommands.changePriority(agent, created.id, {
+      expectedVersion: created.version,
+      priority: "HIGH",
+    });
+
+    expect(changed.priority).toBe("HIGH");
+    expect(changed.priorityHistory).toHaveLength(1);
+    expect(changed.priorityHistory?.[0]).toMatchObject({
+      fromPriority: "NORMAL",
+      toPriority: "HIGH",
+    });
+    expect(changed.priorityHistory?.[0]?.actor).toMatchObject({
+      id: agent.userId,
+      type: "USER",
+    });
+    const requesterView = await ticketQueries.getTicket(requester, created.id);
+    expect(requesterView).not.toHaveProperty("priorityHistory");
   });
 
   it("allocates unique tenant ticket numbers under parallel creation", async () => {
@@ -342,6 +367,53 @@ describe("customer and ticket transaction core", () => {
     });
     const requesterResult = await ticketQueries.listTickets(requester, input);
     expect(requesterResult.items.every((ticket) => ticket.id !== foreign.id)).toBe(true);
+  });
+
+  it("searches ticket tags without crossing tenant or requester boundaries", async () => {
+    const marker = `tag-${randomUUID()}`;
+    const own = await createRequesterTicket(`Tagged ticket ${randomUUID()}`);
+    const globexContact = await prisma.customerContact.findFirstOrThrow({
+      where: { tenantId: DEMO_TENANTS.globex },
+    });
+    const foreign = await ticketCommands.createTicket(globexAgent, {
+      description: "Foreign tagged integration ticket",
+      priority: "NORMAL",
+      requesterContactId: globexContact.id,
+      subject: `Foreign tagged ticket ${randomUUID()}`,
+    });
+    createdTicketIds.add(foreign.id);
+    const [ownTag, foreignTag] = await Promise.all([
+      prisma.tag.create({ data: { name: marker, tenantId: agent.tenantId } }),
+      prisma.tag.create({ data: { name: marker, tenantId: globexAgent.tenantId } }),
+    ]);
+    createdTagIds.add(ownTag.id);
+    createdTagIds.add(foreignTag.id);
+    await prisma.ticketTag.createMany({
+      data: [
+        { tagId: ownTag.id, tenantId: agent.tenantId, ticketId: own.id },
+        { tagId: foreignTag.id, tenantId: globexAgent.tenantId, ticketId: foreign.id },
+      ],
+    });
+    const input = {
+      assignment: "ALL" as const,
+      page: 1,
+      pageSize: 20,
+      priority: null,
+      queueId: null,
+      search: marker,
+      sortBy: "updatedAt" as const,
+      sortDirection: "desc" as const,
+      status: null,
+    };
+
+    await expect(ticketQueries.listTickets(agent, input)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: own.id })],
+      total: 1,
+    });
+    await expect(ticketQueries.listTickets(requester, input)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: own.id })],
+      total: 1,
+    });
   });
 
   async function authenticate(email: string, tenantId: string, clientAddress: string) {

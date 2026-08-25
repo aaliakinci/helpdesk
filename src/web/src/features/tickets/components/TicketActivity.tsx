@@ -126,6 +126,28 @@ export function TicketActivity({
           </Stack>
         </Box>
       )}
+      {mode === "staff" && (detail.priorityHistory?.length ?? 0) > 0 && (
+        <Box id={`${id}.priority-history`}>
+          <Typography
+            id={`${id}.priority-history.title`}
+            component="h2"
+            variant="h5"
+            sx={{ mb: 2 }}
+          >
+            {t("app:tickets.priorityHistory")}
+          </Typography>
+          <Stack id={`${id}.priority-history.items`} spacing={1}>
+            {detail.priorityHistory?.map((entry) => (
+              <Card
+                key={entry.id}
+                id={`${id}.priority-history.${entry.id}`}
+                cardTitle={`${t(`app:tickets.priority.${entry.fromPriority}`)} → ${t(`app:tickets.priority.${entry.toPriority}`)}`}
+                subheader={`${entry.actor.type === "SYSTEM" ? t("app:tickets.systemActor") : entry.actor.displayName} · ${formatDate(entry.occurredAtUtc)}`}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
       {(detail.reopenedFrom || detail.reopenedTickets.length > 0) && (
         <Card id={`${id}.linked`} cardTitle={t("app:tickets.linked.title")}>
           <Stack id={`${id}.linked.items`} direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>

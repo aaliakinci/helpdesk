@@ -30,6 +30,9 @@ Requester sockets receive invalidations only for their own ticket. Public commen
 ```
 
 Requester REST projections independently enforce the same privacy boundary, so inspecting network responses does not reveal queue, assignee, or staff-only history.
+Public attachment and priority changes use the same small invalidation contract. Internal
+attachment events never enter requester rooms, and invalidations never contain filenames, storage
+keys, queue identities, assignee identities, or attachment bytes.
 
 ## Delivery topology and recovery
 

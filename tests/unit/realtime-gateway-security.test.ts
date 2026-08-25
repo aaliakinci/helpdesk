@@ -15,6 +15,28 @@ const USER_ID = "00000000-0000-4000-8000-000000000501";
 const QUEUE_ID = "00000000-0000-4000-8000-000000000301";
 
 describe("realtime gateway security", () => {
+  it("rejects untrusted origins and rate-limits repeated handshakes", async () => {
+    let middleware: ((socket: never, next: (error?: Error) => void) => void) | undefined;
+    const gateway = createGateway(() => undefined, [], {
+      websocketConnectionLimit: 1,
+      websocketConnectionWindowSeconds: 60,
+    });
+    gateway.afterInit({ use: (next: typeof middleware) => (middleware = next) } as never);
+    const untrustedError = await invokeMiddleware(middleware, handshakeSocket("https://evil.test"));
+    const acceptedError = await invokeMiddleware(
+      middleware,
+      handshakeSocket("http://127.0.0.1:5173", "198.51.100.11"),
+    );
+    const limitedError = await invokeMiddleware(
+      middleware,
+      handshakeSocket("http://127.0.0.1:5173", "198.51.100.11"),
+    );
+
+    expect(untrustedError?.message).toBe("Origin is not allowed.");
+    expect(acceptedError).toBeUndefined();
+    expect(limitedError?.message).toBe("Connection rate limit exceeded.");
+  });
+
   it("joins only server-derived user, role, and active queue rooms", async () => {
     const joined = vi.fn();
     const gateway = createGateway(() => undefined);
@@ -78,10 +100,24 @@ describe("realtime gateway security", () => {
 function createGateway(
   capture: (listener: (event: SessionInvalidation) => void) => void,
   queueIds: readonly string[] = [QUEUE_ID],
+  security: {
+    readonly websocketConnectionLimit?: number;
+    readonly websocketConnectionWindowSeconds?: number;
+  } = {},
 ): RealtimeGateway {
   return new RealtimeGateway(
-    { values: { realtimeAuthRecheckMs: 60_000, webOrigin: "http://127.0.0.1:5173" } } as never,
-    { listActiveQueueIds: () => Promise.resolve(queueIds) } as never,
+    {
+      values: {
+        realtimeAuthRecheckMs: 60_000,
+        webOrigin: "http://127.0.0.1:5173",
+        websocketConnectionLimit: security.websocketConnectionLimit ?? 30,
+        websocketConnectionWindowSeconds: security.websocketConnectionWindowSeconds ?? 60,
+      },
+    } as never,
+    {
+      authenticateAccessToken: () => Promise.resolve(socketIdentity()),
+      listActiveQueueIds: () => Promise.resolve(queueIds),
+    } as never,
     {
       subscribe: (listener: (event: SessionInvalidation) => void) => {
         capture(listener);
@@ -89,6 +125,22 @@ function createGateway(
       },
     } as never,
   );
+}
+
+function handshakeSocket(origin: string, address = "198.51.100.10") {
+  return {
+    data: {},
+    handshake: { address, auth: { accessToken: "valid-token" }, headers: { origin } },
+    id: `socket-${address}`,
+  };
+}
+
+function invokeMiddleware(
+  middleware: ((socket: never, next: (error?: Error) => void) => void) | undefined,
+  socket: ReturnType<typeof handshakeSocket>,
+): Promise<Error | undefined> {
+  if (!middleware) throw new Error("Realtime middleware was not registered.");
+  return new Promise((resolve) => middleware(socket as never, resolve));
 }
 
 function socketIdentity() {

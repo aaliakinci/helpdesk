@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 
 export type RuntimeEnvironment = "development" | "test" | "production";
+export type AttachmentStorageDriver = "local" | "s3";
 
 export interface PlatformEnvironment {
   readonly accessTokenAudience: string;
@@ -9,6 +10,15 @@ export interface PlatformEnvironment {
   readonly accessTokenTtlSeconds: number;
   readonly apiPort: number;
   readonly appVersion: string;
+  readonly attachmentLocalDirectory: string;
+  readonly attachmentMaxBytes: number;
+  readonly attachmentStorageDriver: AttachmentStorageDriver;
+  readonly attachmentS3AccessKeyId: string | null;
+  readonly attachmentS3Bucket: string | null;
+  readonly attachmentS3Endpoint: string | null;
+  readonly attachmentS3ForcePathStyle: boolean;
+  readonly attachmentS3Region: string | null;
+  readonly attachmentS3SecretAccessKey: string | null;
   readonly authLoginLimit: number;
   readonly authLoginWindowSeconds: number;
   readonly databaseUrl: string;
@@ -24,9 +34,16 @@ export interface PlatformEnvironment {
   readonly refreshSessionTtlDays: number;
   readonly redisUrl: string;
   readonly realtimeAuthRecheckMs: number;
+  readonly requestRateLimit: number;
+  readonly requestRateWindowSeconds: number;
   readonly slaSchedulerBatchSize: number;
   readonly slaSchedulerIntervalMs: number;
+  readonly trustedProxyHops: number;
+  readonly uploadRateLimit: number;
+  readonly uploadTimeoutMs: number;
   readonly webOrigin: string;
+  readonly websocketConnectionLimit: number;
+  readonly websocketConnectionWindowSeconds: number;
   readonly workerHealthPort: number;
 }
 
@@ -41,6 +58,11 @@ export class PlatformConfigService {
 
 export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnvironment {
   const nodeEnvironment = parseNodeEnvironment(environment.NODE_ENV);
+  const attachmentStorageDriver = parseAttachmentStorageDriver(
+    environment.ATTACHMENT_STORAGE_DRIVER,
+    nodeEnvironment,
+  );
+  const s3 = parseS3Configuration(environment, attachmentStorageDriver, nodeEnvironment);
   return {
     accessTokenAudience: parseIdentifier(
       environment.ACCESS_TOKEN_AUDIENCE,
@@ -62,6 +84,20 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
     ),
     apiPort: parsePort(environment.API_PORT, 8080, "API_PORT"),
     appVersion: parseVersion(environment.APP_VERSION),
+    attachmentLocalDirectory: parseAbsoluteDirectory(
+      environment.ATTACHMENT_LOCAL_DIRECTORY,
+      "/var/lib/helpdesk/attachments",
+      "ATTACHMENT_LOCAL_DIRECTORY",
+    ),
+    attachmentMaxBytes: parseInteger(
+      environment.ATTACHMENT_MAX_BYTES,
+      5_242_880,
+      "ATTACHMENT_MAX_BYTES",
+      1_024,
+      10_485_760,
+    ),
+    attachmentStorageDriver,
+    ...s3,
     authLoginLimit: parseInteger(environment.AUTH_LOGIN_LIMIT, 5, "AUTH_LOGIN_LIMIT", 1, 100),
     authLoginWindowSeconds: parseInteger(
       environment.AUTH_LOGIN_WINDOW_SECONDS,
@@ -121,6 +157,20 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
       1_000,
       60_000,
     ),
+    requestRateLimit: parseInteger(
+      environment.REQUEST_RATE_LIMIT,
+      240,
+      "REQUEST_RATE_LIMIT",
+      10,
+      10_000,
+    ),
+    requestRateWindowSeconds: parseInteger(
+      environment.REQUEST_RATE_WINDOW_SECONDS,
+      60,
+      "REQUEST_RATE_WINDOW_SECONDS",
+      10,
+      3_600,
+    ),
     slaSchedulerBatchSize: parseInteger(
       environment.SLA_SCHEDULER_BATCH_SIZE,
       50,
@@ -135,11 +185,90 @@ export function parseEnvironment(environment: NodeJS.ProcessEnv): PlatformEnviro
       1_000,
       300_000,
     ),
-    webOrigin: requireUrl(environment.WEB_ORIGIN ?? "http://127.0.0.1:5173", "WEB_ORIGIN", [
-      "http:",
-      "https:",
-    ]),
+    trustedProxyHops: parseInteger(environment.TRUSTED_PROXY_HOPS, 0, "TRUSTED_PROXY_HOPS", 0, 2),
+    uploadRateLimit: parseInteger(environment.UPLOAD_RATE_LIMIT, 12, "UPLOAD_RATE_LIMIT", 1, 1_000),
+    uploadTimeoutMs: parseInteger(
+      environment.UPLOAD_TIMEOUT_MS,
+      30_000,
+      "UPLOAD_TIMEOUT_MS",
+      1_000,
+      120_000,
+    ),
+    webOrigin: requireOrigin(environment.WEB_ORIGIN ?? "http://127.0.0.1:5173", "WEB_ORIGIN"),
+    websocketConnectionLimit: parseInteger(
+      environment.WEBSOCKET_CONNECTION_LIMIT,
+      30,
+      "WEBSOCKET_CONNECTION_LIMIT",
+      1,
+      1_000,
+    ),
+    websocketConnectionWindowSeconds: parseInteger(
+      environment.WEBSOCKET_CONNECTION_WINDOW_SECONDS,
+      60,
+      "WEBSOCKET_CONNECTION_WINDOW_SECONDS",
+      10,
+      3_600,
+    ),
     workerHealthPort: parsePort(environment.WORKER_HEALTH_PORT, 8081, "WORKER_HEALTH_PORT"),
+  };
+}
+
+function parseAttachmentStorageDriver(
+  value: string | undefined,
+  nodeEnvironment: RuntimeEnvironment,
+): AttachmentStorageDriver {
+  if (value === "local" || value === "s3") return value;
+  if (value !== undefined) throw new Error("ATTACHMENT_STORAGE_DRIVER must be local or s3.");
+  if (nodeEnvironment === "production") {
+    throw new Error("ATTACHMENT_STORAGE_DRIVER is required in production.");
+  }
+  return "local";
+}
+
+function parseS3Configuration(
+  environment: NodeJS.ProcessEnv,
+  driver: AttachmentStorageDriver,
+  nodeEnvironment: RuntimeEnvironment,
+): Pick<
+  PlatformEnvironment,
+  | "attachmentS3AccessKeyId"
+  | "attachmentS3Bucket"
+  | "attachmentS3Endpoint"
+  | "attachmentS3ForcePathStyle"
+  | "attachmentS3Region"
+  | "attachmentS3SecretAccessKey"
+> {
+  if (driver === "local") {
+    return {
+      attachmentS3AccessKeyId: null,
+      attachmentS3Bucket: null,
+      attachmentS3Endpoint: null,
+      attachmentS3ForcePathStyle: true,
+      attachmentS3Region: null,
+      attachmentS3SecretAccessKey: null,
+    };
+  }
+  return {
+    attachmentS3AccessKeyId: requireNonEmpty(
+      environment.ATTACHMENT_S3_ACCESS_KEY_ID,
+      "ATTACHMENT_S3_ACCESS_KEY_ID",
+    ),
+    attachmentS3Bucket: parseIdentifier(
+      environment.ATTACHMENT_S3_BUCKET,
+      "",
+      "ATTACHMENT_S3_BUCKET",
+    ),
+    attachmentS3Endpoint: requireS3Endpoint(environment.ATTACHMENT_S3_ENDPOINT, nodeEnvironment),
+    attachmentS3ForcePathStyle: parseBoolean(
+      environment.ATTACHMENT_S3_FORCE_PATH_STYLE,
+      true,
+      "ATTACHMENT_S3_FORCE_PATH_STYLE",
+    ),
+    attachmentS3Region: requireNonEmpty(environment.ATTACHMENT_S3_REGION, "ATTACHMENT_S3_REGION"),
+    attachmentS3SecretAccessKey: requireSecret(
+      environment.ATTACHMENT_S3_SECRET_ACCESS_KEY,
+      "ATTACHMENT_S3_SECRET_ACCESS_KEY",
+    ),
   };
 }
 
@@ -148,6 +277,18 @@ function parseBoolean(value: string | undefined, fallback: boolean, name: string
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error(`${name} must be true or false.`);
+}
+
+function parseAbsoluteDirectory(value: string | undefined, fallback: string, name: string): string {
+  const candidate = value?.trim() || fallback;
+  if (!candidate.startsWith("/") || candidate.includes("\0")) {
+    throw new Error(`${name} must be an absolute path.`);
+  }
+  const normalized = candidate.replace(/\/+$/u, "") || "/";
+  if (normalized === "/") {
+    throw new Error(`${name} must not use the filesystem root.`);
+  }
+  return normalized;
 }
 
 function parseIdentifier(value: string | undefined, fallback: string, name: string): string {
@@ -206,6 +347,12 @@ function requireSecret(value: string | undefined, name: string): string {
   return value;
 }
 
+function requireNonEmpty(value: string | undefined, name: string): string {
+  const candidate = value?.trim();
+  if (!candidate || candidate.length > 500) throw new Error(`${name} is required.`);
+  return candidate;
+}
+
 function requireUrl(
   value: string | undefined,
   name: string,
@@ -227,4 +374,30 @@ function requireUrl(
   }
 
   return value;
+}
+
+function requireOrigin(value: string, name: string): string {
+  const parsed = new URL(requireUrl(value, name, ["http:", "https:"]));
+  if (
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(`${name} must be an HTTP(S) origin without credentials, path, query, or hash.`);
+  }
+  return parsed.origin;
+}
+
+function requireS3Endpoint(value: string | undefined, nodeEnvironment: RuntimeEnvironment): string {
+  const endpoint = requireUrl(value, "ATTACHMENT_S3_ENDPOINT", ["http:", "https:"]);
+  const parsed = new URL(endpoint);
+  if (parsed.username || parsed.password) {
+    throw new Error("ATTACHMENT_S3_ENDPOINT must not contain credentials.");
+  }
+  if (nodeEnvironment === "production" && parsed.protocol !== "https:") {
+    throw new Error("ATTACHMENT_S3_ENDPOINT must use HTTPS in production.");
+  }
+  return endpoint;
 }

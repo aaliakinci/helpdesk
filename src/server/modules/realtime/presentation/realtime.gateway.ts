@@ -14,6 +14,7 @@ import type { Namespace, Socket } from "socket.io";
 
 import {
   PlatformConfigService,
+  BoundedRateLimiter,
   SessionInvalidationService,
   type SessionInvalidation,
   writeStructuredLog,
@@ -60,6 +61,7 @@ export class RealtimeGateway
   private namespace!: Namespace;
 
   private readonly accessTokens = new Map<string, string>();
+  private readonly handshakeLimiter = new BoundedRateLimiter();
   private recheckTimer: NodeJS.Timeout | undefined;
   private unsubscribeInvalidations: (() => void) | undefined;
 
@@ -116,6 +118,12 @@ export class RealtimeGateway
   }
 
   private async authenticateHandshake(socket: RealtimeSocket): Promise<void> {
+    const decision = this.handshakeLimiter.consume(
+      socket.handshake.address,
+      this.config.values.websocketConnectionLimit,
+      this.config.values.websocketConnectionWindowSeconds * 1_000,
+    );
+    if (!decision.allowed) throw new Error("Connection rate limit exceeded.");
     if (socket.handshake.headers.origin !== this.config.values.webOrigin) {
       throw new Error("Origin is not allowed.");
     }

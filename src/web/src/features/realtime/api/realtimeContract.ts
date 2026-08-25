@@ -2,8 +2,10 @@ import { requireNumber, requireRecord, requireString } from "@/shared/api/contra
 
 export type RealtimeInvalidationType =
   | "ticket.assigned"
+  | "ticket.attachment_added"
   | "ticket.comment_added"
   | "ticket.created"
+  | "ticket.priority_changed"
   | "ticket.sla_warning"
   | "ticket.status_changed";
 
@@ -17,8 +19,10 @@ export interface RealtimeInvalidation {
 
 const TYPES: readonly RealtimeInvalidationType[] = [
   "ticket.assigned",
+  "ticket.attachment_added",
   "ticket.comment_added",
   "ticket.created",
+  "ticket.priority_changed",
   "ticket.sla_warning",
   "ticket.status_changed",
 ];

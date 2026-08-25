@@ -4,8 +4,10 @@ export const REALTIME_EVENT_NAME = "support.invalidate";
 
 export type RealtimeInvalidationType =
   | "ticket.assigned"
+  | "ticket.attachment_added"
   | "ticket.comment_added"
   | "ticket.created"
+  | "ticket.priority_changed"
   | "ticket.sla_warning"
   | "ticket.status_changed";
 
@@ -31,6 +33,8 @@ export function projectRealtimeEvent(
     envelope.type !== "ticket.assignment-changed.v1" &&
     envelope.type !== "ticket.status-changed.v1" &&
     envelope.type !== "ticket.comment.added.v1" &&
+    envelope.type !== "ticket.attachment-added.v1" &&
+    envelope.type !== "ticket.priority-changed.v1" &&
     envelope.type !== "ticket.sla-warning.v1"
   ) {
     return null;
@@ -73,6 +77,23 @@ export function projectRealtimeEvent(
         requesterVisible: visibility === "PUBLIC",
       };
     }
+    case "ticket.attachment-added.v1": {
+      const visibility = payload.visibility;
+      if (visibility !== "PUBLIC" && visibility !== "INTERNAL") {
+        throw new Error("visibility is invalid.");
+      }
+      return {
+        invalidation: { ...common, type: "ticket.attachment_added" },
+        relatedQueueIds: [],
+        requesterVisible: visibility === "PUBLIC",
+      };
+    }
+    case "ticket.priority-changed.v1":
+      return {
+        invalidation: { ...common, type: "ticket.priority_changed" },
+        relatedQueueIds: [],
+        requesterVisible: true,
+      };
     case "ticket.sla-warning.v1":
       return {
         invalidation: { ...common, type: "ticket.sla_warning" },

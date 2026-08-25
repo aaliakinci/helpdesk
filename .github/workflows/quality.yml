@@ -57,12 +57,18 @@ jobs:
         run: apt-get update && apt-get install --yes --no-install-recommends openssl
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Audit production dependency vulnerabilities
+        run: npm run verify:dependency-audit
       - name: Verify static quality gates
         run: npm run verify
+      - name: Verify migrations from an empty database
+        run: npm run verify:migrations
       - name: Apply database migrations
         run: npm run db:migrate:deploy
       - name: Seed deterministic demo identities
         run: npm run db:seed
+      - name: Verify PostgreSQL query plans
+        run: npm run verify:query-plans
       - name: Verify infrastructure integration
         run: npm run test:integration
       - name: Install Chromium for the browser quality gate
@@ -81,3 +87,23 @@ jobs:
             sleep 1
           done
           npm run test:e2e:accessibility
+
+  image-security:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [support-api, support-worker]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.target }} image
+        run: docker build --file deploy/Dockerfile --target "${{ matrix.target }}" --tag "helpdesk-${{ matrix.target }}:ci" .
+      - name: Scan ${{ matrix.target }} image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: "1"
+          format: table
+          ignore-unfixed: true
+          image-ref: helpdesk-${{ matrix.target }}:ci
+          severity: CRITICAL,HIGH
+          version: v0.74.0
+          vuln-type: os,library

@@ -18,4 +18,7 @@ export {
   normalizeTraceparent,
   resolveRequestIdentity,
 } from "./observability/request-context.js";
+export { BoundedRateLimiter, type RateLimitDecision } from "./security/bounded-rate-limiter.js";
+export { HttpRateLimitMiddleware } from "./security/http-rate-limit.middleware.js";
+export { SecurityHeadersMiddleware } from "./security/security-headers.middleware.js";
 export { PlatformModule } from "./platform.module.js";

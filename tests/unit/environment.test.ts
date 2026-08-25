@@ -37,8 +37,37 @@ describe("parseEnvironment", () => {
       parseEnvironment({ ...validEnvironment, ACCESS_TOKEN_SECRET: "too-short" }),
     ).toThrow("ACCESS_TOKEN_SECRET must contain at least 32 bytes.");
     expect(
-      parseEnvironment({ ...validEnvironment, NODE_ENV: "production" }).refreshCookieSecure,
+      parseEnvironment({
+        ...validEnvironment,
+        ATTACHMENT_STORAGE_DRIVER: "local",
+        NODE_ENV: "production",
+      }).refreshCookieSecure,
     ).toBe(true);
+  });
+
+  it("requires an explicit storage driver in production and complete S3 credentials", () => {
+    expect(() => parseEnvironment({ ...validEnvironment, NODE_ENV: "production" })).toThrow(
+      "ATTACHMENT_STORAGE_DRIVER is required in production.",
+    );
+    expect(() =>
+      parseEnvironment({
+        ...validEnvironment,
+        ATTACHMENT_STORAGE_DRIVER: "s3",
+        NODE_ENV: "production",
+      }),
+    ).toThrow("ATTACHMENT_S3_ACCESS_KEY_ID is required.");
+    expect(() =>
+      parseEnvironment({
+        ...validEnvironment,
+        ATTACHMENT_S3_ACCESS_KEY_ID: "access-key",
+        ATTACHMENT_S3_BUCKET: "private-bucket",
+        ATTACHMENT_S3_ENDPOINT: "http://objects.example.test",
+        ATTACHMENT_S3_REGION: "eu-central-1",
+        ATTACHMENT_S3_SECRET_ACCESS_KEY: "s3-secret-at-least-thirty-two-bytes-long",
+        ATTACHMENT_STORAGE_DRIVER: "s3",
+        NODE_ENV: "production",
+      }),
+    ).toThrow("ATTACHMENT_S3_ENDPOINT must use HTTPS in production.");
   });
 
   it("rejects missing infrastructure configuration", () => {
@@ -54,5 +83,14 @@ describe("parseEnvironment", () => {
     expect(() => parseEnvironment({ ...validEnvironment, API_PORT: "70000" })).toThrow(
       "API_PORT must be an integer between 1 and 65535.",
     );
+  });
+
+  it("requires an exact web origin and a scoped attachment directory", () => {
+    expect(() =>
+      parseEnvironment({ ...validEnvironment, WEB_ORIGIN: "https://helpdesk.example.test/path" }),
+    ).toThrow("WEB_ORIGIN must be an HTTP(S) origin");
+    expect(() =>
+      parseEnvironment({ ...validEnvironment, ATTACHMENT_LOCAL_DIRECTORY: "/" }),
+    ).toThrow("ATTACHMENT_LOCAL_DIRECTORY must not use the filesystem root");
   });
 });

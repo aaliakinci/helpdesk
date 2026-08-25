@@ -2,11 +2,13 @@ import { appHttpClient } from "@/shared/api";
 
 import {
   decodeCustomers,
+  decodeTicketAttachment,
   decodeTicketDetail,
   decodeTicketPage,
   type CreateTicketRequest,
   type CustomerOption,
   type TicketCommentVisibility,
+  type TicketAttachment,
   type TicketDetail,
   type TicketPage,
   type TicketPriority,
@@ -124,6 +126,52 @@ export function changeTicketStatus(
       metadata: { ...mutationMetadata, operationName: "tickets.change-status" },
     },
   );
+}
+
+export function changeTicketPriority(
+  ticketId: string,
+  request: { readonly expectedVersion: number; readonly priority: TicketPriority },
+): Promise<TicketDetail> {
+  return appHttpClient.patchData<TicketDetail, typeof request>(
+    `/api/v1/tickets/${ticketId}/priority`,
+    request,
+    {
+      decode: decodeTicketDetail,
+      metadata: { ...mutationMetadata, operationName: "tickets.change-priority" },
+    },
+  );
+}
+
+export function uploadTicketAttachment(
+  ticketId: string,
+  file: File,
+  visibility: TicketCommentVisibility,
+): Promise<TicketAttachment> {
+  const body = new FormData();
+  body.set("file", file);
+  body.set("visibility", visibility);
+  return appHttpClient
+    .request<TicketAttachment, FormData>({
+      body,
+      decode: decodeTicketAttachment,
+      metadata: { ...mutationMetadata, operationName: "tickets.attachment.upload" },
+      method: "POST",
+      timeoutMs: 30_000,
+      url: `/api/v1/tickets/${ticketId}/attachments`,
+    })
+    .then((response) => response.data);
+}
+
+export function downloadTicketAttachment(attachmentId: string): Promise<Blob> {
+  return appHttpClient
+    .request<Blob>({
+      metadata: { operationName: "tickets.attachment.download" },
+      method: "GET",
+      responseType: "blob",
+      timeoutMs: 30_000,
+      url: `/api/v1/attachments/${attachmentId}`,
+    })
+    .then((response) => response.data);
 }
 
 export function reopenTicket(ticketId: string, expectedVersion: number): Promise<TicketDetail> {

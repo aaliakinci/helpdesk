@@ -426,6 +426,7 @@ model TicketComment {
   tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket       Ticket                  @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
   author       User                    @relation("TicketCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+  attachments  Attachment[]
 
   @@unique([tenantId, id], map: "ticket_comments_tenant_id_id_key")
   @@index([tenantId, ticketId, createdAt], map: "ticket_comments_tenant_ticket_created_idx")
@@ -481,19 +482,24 @@ model Attachment {
   id              String   @id @default(uuid()) @db.Uuid
   tenantId        String   @map("tenant_id") @db.Uuid
   ticketId        String   @map("ticket_id") @db.Uuid
+  commentId       String?  @map("comment_id") @db.Uuid
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   fileName        String   @map("file_name") @db.VarChar(255)
   contentType     String   @map("content_type") @db.VarChar(120)
   byteSize        BigInt   @map("byte_size")
+  checksumSha256  String?  @map("checksum_sha256") @db.Char(64)
   storageKey      String   @map("storage_key") @db.VarChar(500)
+  visibility      TicketCommentVisibility @default(PUBLIC)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket          Ticket   @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  comment         TicketComment? @relation(fields: [tenantId, commentId], references: [tenantId, id], onDelete: Cascade)
   createdBy       User     @relation("AttachmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, id], map: "attachments_tenant_id_id_key")
   @@unique([tenantId, storageKey], map: "attachments_tenant_storage_key_key")
   @@index([tenantId, ticketId, createdAt], map: "attachments_tenant_ticket_created_idx")
+  @@index([tenantId, commentId, createdAt], map: "attachments_tenant_comment_created_idx")
   @@map("attachments")
 }
 

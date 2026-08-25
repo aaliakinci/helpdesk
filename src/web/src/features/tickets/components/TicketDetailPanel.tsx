@@ -11,6 +11,7 @@ import { useAppTranslation } from "@/i18n";
 import { useTicketDetail } from "../hooks/useTicketDetail";
 import { formatTicketDate, type TicketMode } from "../model/ticketPresentation";
 import { TicketActivity } from "./TicketActivity";
+import { TicketAttachmentsCard } from "./TicketAttachmentsCard";
 import { TicketAssignmentPanel } from "./TicketAssignmentPanel";
 import { TicketReplyComposer } from "./TicketReplyComposer";
 import { TicketSlaCard } from "./TicketSlaCard";
@@ -149,6 +150,7 @@ export function TicketDetailPanel({
       {mode === "staff" && <TicketAssignmentPanel id={id} detail={detail} ticket={ticket} />}
       {mode === "staff" && <TicketWorkflow id={id} detail={detail} ticket={ticket} />}
       <TicketActivity id={id} detail={detail} mode={mode} ticket={ticket} />
+      <TicketAttachmentsCard id={id} detail={detail} mode={mode} ticket={ticket} />
       {detail.status !== "CLOSED" && <TicketReplyComposer id={id} mode={mode} ticket={ticket} />}
       <Box id={`${id}.route-meta`} sx={{ display: "none" }}>
         {ticket.basePath}

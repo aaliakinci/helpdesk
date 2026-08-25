@@ -77,7 +77,7 @@ returns `409` and does not partially update the aggregate or history.
 
 - `GET /api/v1/tickets` supports bounded `page`, `pageSize`, `search`, `status`, `priority`,
   `queueId`, `assignment`, `sortBy`, and `sortDirection` parameters. `assignment` accepts `ALL`,
-  `MINE`, or `UNASSIGNED`. Search covers ticket number, subject, description, and requester fields
+  `MINE`, or `UNASSIGNED`. Search covers ticket number, subject, description, requester fields, and tags
   inside the server-derived tenant/requester scope.
 - `POST /api/v1/tickets` creates a ticket, initial status history, audit entry, and
   `ticket.created.v1` outbox message in one transaction.
@@ -89,6 +89,11 @@ returns `409` and does not partially update the aggregate or history.
   requires `expectedVersion`.
 - `PATCH /api/v1/tickets/:ticketId/status` applies the fixed state machine and requires
   `expectedVersion`.
+- `PATCH /api/v1/tickets/:ticketId/priority` changes priority with optimistic concurrency and
+  records audit/outbox evidence. Existing SLA snapshots remain immutable.
+- `POST /api/v1/tickets/:ticketId/attachments` accepts one validated private multipart attachment;
+  `GET /api/v1/attachments/:attachmentId` streams it only after tenant, ticket, role, visibility,
+  and checksum validation. Requester detail never contains internal attachment metadata.
 - `POST /api/v1/tickets/:ticketId/reopen` moves a resolved ticket to Open or creates a new linked
   ticket when the source is Closed.
 
@@ -96,6 +101,17 @@ Ticket numbers are allocated atomically per tenant. Every successful comment or 
 increments `version`; concurrent writes against the same revision produce one success and one
 stable `409`. Closed tickets are terminal and immutable except through the explicit linked-reopen
 operation.
+
+## Audit
+
+- `GET /api/v1/audit` requires `audit.read` and supports bounded server pagination plus exact
+  action, actor type/user, aggregate type, and UTC date-range filters.
+- There is no audit mutation endpoint. Results always use the active tenant and expose only
+  allowlisted scalar metadata.
+
+Status, priority, assignment, queue, reply/internal note, attachment, SLA, and membership
+role/status writes produce business audit evidence. Historical identity audit rows are migrated
+into the same read projection without removing the original identity evidence.
 
 ## Queues, assignment, and operations
 

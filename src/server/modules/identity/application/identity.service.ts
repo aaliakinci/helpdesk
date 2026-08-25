@@ -404,6 +404,16 @@ export class IdentityService {
           tenantId: identity.tenantId,
         },
       });
+      await transaction.auditEntry.create({
+        data: {
+          action: "membership.role.changed",
+          actorUserId: identity.userId,
+          aggregateId: membership.id,
+          aggregateType: "tenant_membership",
+          metadata: { from: membership.role, to: role },
+          tenantId: identity.tenantId,
+        },
+      });
       return { kind: "success" as const, membership: updated };
     });
 
@@ -456,6 +466,16 @@ export class IdentityService {
           metadata: { from: membership.status, to: status },
           subjectId: membership.id,
           subjectType: "tenant_membership",
+          tenantId: identity.tenantId,
+        },
+      });
+      await transaction.auditEntry.create({
+        data: {
+          action: "membership.status.changed",
+          actorUserId: identity.userId,
+          aggregateId: membership.id,
+          aggregateType: "tenant_membership",
+          metadata: { from: membership.status, to: status },
           tenantId: identity.tenantId,
         },
       });

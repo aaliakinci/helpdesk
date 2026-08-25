@@ -197,6 +197,41 @@ export class TicketCommandService {
     return this.queries.getTicket(identity, ticketId);
   }
 
+  public async changePriority(
+    identity: AuthenticatedIdentity,
+    ticketId: string,
+    input: { readonly expectedVersion: number; readonly priority: TicketPriority },
+  ): Promise<TicketDetail> {
+    this.assertManage(identity);
+    await this.prisma.$transaction(async (transaction) => {
+      const ticket = await this.findMutableTicket(transaction, identity, ticketId);
+      if (ticket.status === "CLOSED") throw new ConflictException("Closed tickets are immutable.");
+      if (ticket.priority === input.priority) {
+        throw new ConflictException("Ticket priority is unchanged.");
+      }
+      const updated = await transaction.ticket.updateMany({
+        data: { priority: input.priority, version: { increment: 1 } },
+        where: { id: ticket.id, tenantId: identity.tenantId, version: input.expectedVersion },
+      });
+      if (updated.count !== 1) throw new ConflictException("Ticket revision is stale.");
+      await this.events.write(transaction, identity, {
+        action: "ticket.priority.changed",
+        aggregateId: ticket.id,
+        aggregateType: "ticket",
+        eventType: "ticket.priority-changed.v1",
+        metadata: { from: ticket.priority, to: input.priority },
+        payload: {
+          fromPriority: ticket.priority,
+          ticketId: ticket.id,
+          ticketNumber: ticket.number,
+          toPriority: input.priority,
+          version: input.expectedVersion + 1,
+        },
+      });
+    });
+    return this.queries.getTicket(identity, ticketId);
+  }
+
   public async reopenTicket(
     identity: AuthenticatedIdentity,
     ticketId: string,

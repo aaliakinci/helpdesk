@@ -76,17 +76,42 @@ export interface TicketStatusHistoryView {
   readonly version: number;
 }
 
+export interface TicketPriorityHistoryView {
+  readonly actor: {
+    readonly displayName: string | null;
+    readonly id: string | null;
+    readonly type: "SYSTEM" | "USER";
+  };
+  readonly fromPriority: TicketPriority;
+  readonly id: string;
+  readonly occurredAtUtc: string;
+  readonly toPriority: TicketPriority;
+}
+
 export interface TicketDetail extends TicketSummary {
   readonly assignmentHistory?: readonly TicketAssignmentView[];
+  readonly attachments: readonly TicketAttachmentView[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketCommentView[];
   readonly description: string;
+  readonly priorityHistory?: readonly TicketPriorityHistoryView[];
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
   readonly sla?: TicketSlaView | null;
   readonly statusHistory?: readonly TicketStatusHistoryView[];
   readonly tags: readonly { readonly id: string; readonly name: string }[];
+}
+
+export interface TicketAttachmentView {
+  readonly byteSize: number;
+  readonly commentId: string | null;
+  readonly contentType: string;
+  readonly createdAtUtc: string;
+  readonly createdBy: { readonly displayName: string; readonly id: string };
+  readonly fileName: string;
+  readonly id: string;
+  readonly visibility: TicketCommentVisibility;
 }
 
 export type SlaMilestoneViewStatus = "ACTIVE" | "APPROACHING" | "BREACHED" | "COMPLETED";

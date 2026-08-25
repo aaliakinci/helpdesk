@@ -45,11 +45,34 @@ export interface TicketComment {
   readonly visibility: TicketCommentVisibility;
 }
 
+export interface TicketAttachment {
+  readonly byteSize: number;
+  readonly commentId: string | null;
+  readonly contentType: "application/pdf" | "image/jpeg" | "image/png" | "text/plain";
+  readonly createdAtUtc: string;
+  readonly createdBy: { readonly displayName: string; readonly id: string };
+  readonly fileName: string;
+  readonly id: string;
+  readonly visibility: TicketCommentVisibility;
+}
+
 export interface TicketDetail extends TicketSummary {
   readonly assignmentHistory?: readonly TicketAssignment[];
+  readonly attachments: readonly TicketAttachment[];
   readonly closedAtUtc: string | null;
   readonly comments: readonly TicketComment[];
   readonly description: string;
+  readonly priorityHistory?: readonly {
+    readonly actor: {
+      readonly displayName: string | null;
+      readonly id: string | null;
+      readonly type: "SYSTEM" | "USER";
+    };
+    readonly fromPriority: TicketPriority;
+    readonly id: string;
+    readonly occurredAtUtc: string;
+    readonly toPriority: TicketPriority;
+  }[];
   readonly reopenedFrom: { readonly id: string; readonly number: number } | null;
   readonly reopenedTickets: readonly { readonly id: string; readonly number: number }[];
   readonly resolvedAtUtc: string | null;
@@ -174,6 +197,7 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
           ),
         }
       : {}),
+    attachments: requireArray(value.attachments, "attachments").map(decodeTicketAttachment),
     closedAtUtc: nullableString(value.closedAtUtc, "closedAtUtc"),
     comments: requireArray(value.comments, "comments").map((item) => {
       const comment = requireRecord(item, "comment");
@@ -186,6 +210,20 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
       };
     }),
     description: requireString(value.description, "description"),
+    ...(Object.hasOwn(value, "priorityHistory")
+      ? {
+          priorityHistory: requireArray(value.priorityHistory, "priorityHistory").map((item) => {
+            const history = requireRecord(item, "priority history");
+            return {
+              actor: decodeStatusActor(history.actor),
+              fromPriority: decodePriority(history.fromPriority),
+              id: requireString(history.id, "priorityHistory.id"),
+              occurredAtUtc: requireString(history.occurredAtUtc, "priorityHistory.occurredAtUtc"),
+              toPriority: decodePriority(history.toPriority),
+            };
+          }),
+        }
+      : {}),
     reopenedFrom: value.reopenedFrom === null ? null : decodeTicketLink(value.reopenedFrom),
     reopenedTickets: requireArray(value.reopenedTickets, "reopenedTickets").map(decodeTicketLink),
     resolvedAtUtc: nullableString(value.resolvedAtUtc, "resolvedAtUtc"),
@@ -211,6 +249,34 @@ export function decodeTicketDetail(body: unknown): TicketDetail {
       const tag = requireRecord(item, "tag");
       return { id: requireString(tag.id, "tag.id"), name: requireString(tag.name, "tag.name") };
     }),
+  };
+}
+
+export function decodeTicketAttachment(body: unknown): TicketAttachment {
+  const value = requireRecord(body, "ticket attachment");
+  const contentType = requireString(value.contentType, "attachment.contentType");
+  const allowedContentTypes: readonly TicketAttachment["contentType"][] = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "text/plain",
+  ];
+  if (!allowedContentTypes.includes(contentType as TicketAttachment["contentType"])) {
+    throw new TypeError("attachment.contentType is invalid.");
+  }
+  const byteSize = requireNumber(value.byteSize, "attachment.byteSize");
+  if (!Number.isSafeInteger(byteSize) || byteSize < 1) {
+    throw new TypeError("attachment.byteSize is invalid.");
+  }
+  return {
+    byteSize,
+    commentId: nullableString(value.commentId, "attachment.commentId"),
+    contentType: contentType as TicketAttachment["contentType"],
+    createdAtUtc: requireString(value.createdAtUtc, "attachment.createdAtUtc"),
+    createdBy: decodePerson(value.createdBy),
+    fileName: requireString(value.fileName, "attachment.fileName"),
+    id: requireString(value.id, "attachment.id"),
+    visibility: decodeVisibility(value.visibility),
   };
 }
 

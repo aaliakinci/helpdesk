@@ -11,6 +11,7 @@ import {
   decodeCreateTicket,
   decodeExpectedVersion,
   decodeManualAssignmentWrite,
+  decodePriorityWrite,
   decodeQueueAssignmentWrite,
   decodeStatusWrite,
   decodeTicketListQuery,
@@ -87,6 +88,16 @@ export class TicketsController {
     @Body() body: unknown,
   ) {
     return this.commands.changeStatus(identity, requireUuid(ticketId), decodeStatusWrite(body));
+  }
+
+  @Patch(":ticketId/priority")
+  @ApiOperation({ summary: "Change ticket priority without rewriting its SLA snapshot" })
+  public changePriority(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param("ticketId") ticketId: string,
+    @Body() body: unknown,
+  ) {
+    return this.commands.changePriority(identity, requireUuid(ticketId), decodePriorityWrite(body));
   }
 
   @Post(":ticketId/reopen")

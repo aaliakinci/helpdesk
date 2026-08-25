@@ -94,6 +94,19 @@ export function decodeStatusWrite(body: unknown): {
   };
 }
 
+export function decodePriorityWrite(body: unknown): {
+  readonly expectedVersion: number;
+  readonly priority: TicketPriority;
+} {
+  const value = requireRecord(body);
+  assertKeys(value, ["expectedVersion", "priority"]);
+  if (!isTicketPriority(value.priority)) throw new BadRequestException("priority is invalid.");
+  return {
+    expectedVersion: requirePositiveInteger(value.expectedVersion, "expectedVersion"),
+    priority: value.priority,
+  };
+}
+
 export function decodeExpectedVersion(body: unknown): number {
   const value = requireRecord(body);
   assertKeys(value, ["expectedVersion"]);

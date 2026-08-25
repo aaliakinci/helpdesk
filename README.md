@@ -21,13 +21,18 @@ A multi-tenant customer support platform for small and medium-sized support team
 - SQL-backed unassigned/my-ticket/queue workload and operational dashboard projections
 - Versioned wall-clock SLA policies, immutable ticket snapshots, idempotent warnings, and automatic close scheduling
 - Authorized Socket.IO invalidations, Redis scale-out, and membership-scoped in-app notifications
+- Private ticket attachments with local/S3-compatible storage, signature detection, checksums, and requester-safe projection
+- PostgreSQL tenant-scoped ticket/tag search with verified trigram and operational query plans
+- Read-only, filtered, server-paginated audit history with allowlisted metadata
+- HTTP/upload/WebSocket rate limits, trusted-proxy controls, strict origin checks, and browser security headers
 - React, Vite, and Lily UI login/session/ticket/queue application with Turkish and English locales
 - Docker Compose development topology and GitHub Actions quality gates
 
-## Further v1 product scope
+## Deployment scope
 
-- Audit history, attachments, PostgreSQL search, and server-side pagination
-- Docker-based local development and an HTTPS portfolio deployment
+The repository includes Docker-based local development and provider-neutral single-host deployment
+assets. Public deployment still requires an HTTPS edge, private object storage, backups, and the
+documented operational controls.
 
 The v1 scope deliberately excludes email inbox synchronization, custom role builders, advanced business-hours calendars, Elasticsearch, AI features, billing, and omnichannel integrations.
 
@@ -42,6 +47,8 @@ The repository is organized around three deployable applications:
 PostgreSQL is the source of truth. RabbitMQ delivery is at-least-once and consumers must be idempotent. Redis may support WebSocket scale-out and replaceable state, but business correctness must not depend on it.
 
 See [the accepted architecture decisions](docs/decisions/README.md), [authentication design](docs/authentication.md), and [the platform baseline](docs/platform-baseline.md).
+Attachment and runtime boundaries are documented in [attachment security](docs/attachment-security.md)
+and [security hardening](docs/security-hardening.md).
 
 ## Repository layout
 

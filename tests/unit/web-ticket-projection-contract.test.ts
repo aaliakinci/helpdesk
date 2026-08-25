@@ -46,6 +46,7 @@ describe("requester ticket projection contract", () => {
   it("decodes requester detail without assignment or status history", () => {
     const detail = decodeTicketDetail({
       ...requesterSummary,
+      attachments: [],
       closedAtUtc: null,
       comments: [],
       description: "The requester can inspect their ticket without operational data.",
@@ -57,7 +58,38 @@ describe("requester ticket projection contract", () => {
 
     expect(detail.assignmentStatus).toBe("ASSIGNED");
     expect(detail).not.toHaveProperty("assignmentHistory");
+    expect(detail).not.toHaveProperty("priorityHistory");
     expect(detail).not.toHaveProperty("statusHistory");
     expect(detail).not.toHaveProperty("sla");
+  });
+
+  it("decodes staff priority history as a separate activity projection", () => {
+    const detail = decodeTicketDetail({
+      ...requesterSummary,
+      assignmentHistory: [],
+      attachments: [],
+      closedAtUtc: null,
+      comments: [],
+      description: "Staff activity projection",
+      priorityHistory: [
+        {
+          actor: { displayName: "Demo Manager", id: "user-1", type: "USER" },
+          fromPriority: "NORMAL",
+          id: "audit-1",
+          occurredAtUtc: "2026-08-25T08:30:07.484Z",
+          toPriority: "HIGH",
+        },
+      ],
+      reopenedFrom: null,
+      reopenedTickets: [],
+      resolvedAtUtc: null,
+      sla: null,
+      statusHistory: [],
+      tags: [],
+    });
+
+    expect(detail.priorityHistory).toEqual([
+      expect.objectContaining({ fromPriority: "NORMAL", toPriority: "HIGH" }),
+    ]);
   });
 });
